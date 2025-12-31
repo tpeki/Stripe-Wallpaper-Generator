@@ -1,0 +1,331 @@
+'''wallpaper : 壁紙用シンプル画像生成
+v1.0.0 2025/12/26 stagger-tiled-stripeのパターン生成スクリプト(単発)版
+v2.0.0 2025/12/29 モジュール構成にして、複数のパターン作成に対応
+
+協力：Google Gemini; モジュールのアルゴリズム作成支援(numpy使う手があったなんて)
+謝辞：Kujira Handさん; TkEasyGUIがなければGUIアプリにしようと思いませんでした
+      Microsoft: 鬱陶しいWindowsスポットライトが作成の原動力になりました
+'''
+
+import importlib.util as impl
+import sys
+import os.path as pa
+import glob
+from PIL import Image, ImageDraw
+import random
+from wall_common import *
+import TkEasyGUI as sg
+import threading
+import queue
+
+DEFAULT_MODULE = 'stripe'
+IMAGE_WIDTH = 1920
+IMAGE_HEIGHT = 1080
+SAVE_NUM = 3
+
+def search_modules(modlist: Modules, plugin_path=__file__):
+    modules = {}
+    
+    plugin_dir = pa.dirname(plugin_path)  # directory part
+    plugin_pat = 'mod_*.py'  # filename pattern
+    
+    for modf in glob.glob(plugin_pat, root_dir=plugin_dir):
+        modname = pa.splitext(modf)[0]
+        if modname.startswith('mod_'):
+            modname = modname[4:]
+        
+        print(modf, '---', modname)
+        spec = impl.spec_from_file_location(modname, modf)
+        module = impl.module_from_spec(spec)
+        sys.modules[modname] = module
+        spec.loader.exec_module(module)
+
+        if hasattr(module, 'intro'):
+            fn = getattr(module, 'intro')
+            print( 'module: ', fn(modlist, modname))
+            print(f'Load {modname}')
+            modules[modname] = module
+
+    return modules
+
+# モジュールファイルで作成必要なAPI関数
+#
+#    def intro(modlist: Modules, module_name):
+#        modlist.add_module(module_name, 'ストライプ(タイル)',
+#                           ['color1', 'color_jitter', 'pwidth', 'pheight',
+#                            'sub_jitter'])
+#        return module_name
+#
+#    def default_param(p: Param):  パラメータは例。
+#        p.color1.itoc( BASE_R, BASE_G, BASE_B)
+#        p.pwidth = STRIPE_WIDTH
+#        p.pheight = TILE_HEIGHT
+#        p.color_jitter = DIFF_STRIPE
+#        p.sub_jitter = DIFF_TILE
+#        return p
+#
+#    def generate(p: Param):  実際の画像描画
+#        width = p.width
+#        height = p.height
+#        base_r, base_g, base_b = p.color1.ctoi()
+#        image = Image.new("RGB", (width, height),
+#                          color=(base_r, base_g, base_b))
+#        return image
+#
+# モジュールの呼び出し方
+# (1) モジュールを検索登録する
+# modlist = Modules()
+# p = Param()
+# m = search_modules(modlist, 'mod_*.py')
+#
+# (2) モジュールの関数を呼び出す
+# modlist.modules == [module-name1, module-name2, ...] : 導入したモジュール名
+# modlist.mod_gui[module-name] : モジュールで利用するGUI項目、入ってるものだけ表示
+# m[module-name].default_param(p) : おすすめ初期パラメータを設定
+# image = m[module-name].generate(p)  : 画像を生成
+
+
+def layout(modlist):
+    menudef = [['File', ['Save', 'Exit']],
+                ['Module', modlist.modules],
+                ]
+    
+    color_column_layout = [[sg.Text('Base Color:', key='-color1-0',
+                                    size=(8,1)),
+                            sg.Text('#------', key='-color1-1',
+                                    size=(8,1)),
+                            sg.ColorBrowse('...', key='-color1-2',
+                                           enable_events=True)
+                            ],
+                           [sg.Text('Second Color:', key='-color2-0',
+                                    size=(8,1)),
+                            sg.Text('#------', key='-color2-1',
+                                    size=(8,1)),
+                            sg.ColorBrowse('...', key='-color2-2',
+                                           enable_events=True)
+                            ],
+                           [sg.Text('Third Color:', key='-color3-0',
+                                    size=(8,1)),
+                            sg.Text('#------', key='-color3-1',
+                                    size=(8,1)),
+                            sg.ColorBrowse('...', key='-color3-2',
+                                           enable_events=True)
+                            ]]
+    jitter_column_layout = [[sg.Text('Color Mod1:', key='-color_jitter-0',
+                                    size=(10,1)),
+                             sg.Input('0', key='-color_jitter-1',
+                                    enable_events=True, size=(3,1))],
+                            [sg.Text('Color Mod2:', key='-sub_jitter-0',
+                                    size=(10,1)),
+                             sg.Input('0', key='-sub_jitter-1',
+                                    enable_events=True, size=(3,1))],
+                            [sg.Text('Color Mod3:', key='-sub_jitter2-0',
+                                    size=(10,1)),
+                             sg.Input('0', key='-sub_jitter2-1',
+                                    enable_events=True, size=(3,1))],
+                            ]
+    pattern_column_layout = [[sg.Text('Pattern1:', key='-pwidth-0',
+                                    size=(10,1)),
+                             sg.Input('0', key='-pwidth-1',
+                                    enable_events=True, size=(3,1))],
+                            [sg.Text('Pattern2:', key='-pheight-0',
+                                    size=(10,1)),
+                             sg.Input('0', key='-pheight-1',
+                                    enable_events=True, size=(3,1))],
+                            [sg.Text('Pattern3:', key='-pdepth-0',
+                                    size=(10,1)),
+                             sg.Input('0', key='-pdepth-1',
+                                    enable_events=True, size=(3,1))],
+                            ]
+    file_and_button_column = [[sg.Text('File Name:', text_color='#0022ff'),
+                               sg.Text('', expand_x=True, key='-fname-')],
+                              [sg.Text('')],
+                              [sg.Text('', expand_x=True),
+                               sg.Button('Redo', key='-redo-',
+                                         background_color='#ffffdd'),
+                               sg.Button('Save', key='-ok-',
+                                         background_color='#ddffdd'),
+                               sg.Text('　'),
+                               sg.Button('Quit', key='-done-',
+                                         background_color='#ffdddd'),
+                               ]
+                              ]
+    layout = [[sg.Menu(menudef, key='-mnu-')],
+              [sg.Text('', key='-modname-'), sg.Text(' '),
+               sg.Text('', key='-moddesc-', expand_x=True)],
+              [sg.Image(key='-img-', background_color=(128,128,128),
+                    size=(480,270))],
+              [sg.Column(layout=color_column_layout),
+               sg.Column(layout=jitter_column_layout),
+               sg.Column(layout=pattern_column_layout, expand_x=True),
+               sg.Column(layout=file_and_button_column)]
+              ]
+
+    return layout
+
+
+def hide_param(window, param):
+    for x in range(3):
+        k = f'-{param}-{x}'
+        try:
+            window[k].set_disabled(True)
+        except KeyError:
+            pass
+        window[f'-{param}-0'].update('')
+
+
+def show_param(window, param, desc):
+    for x in range(3):
+        try:
+            window[f'-{param}-{x}'].set_disabled(False)
+        except KeyError:
+            pass
+        window[f'-{param}-0'].update(desc)
+
+
+def set_module(window, modlist, module_name):
+    if module_name not in modlist.modules:
+        return False
+    window['-modname-'].update(text=module_name)
+    window['-moddesc-'].update(text=modlist.mod_desc[module_name])
+
+    for el in PARAMVALS:
+        hide_param(window, el)
+    
+    for el in modlist.mod_gui[module_name].keys():
+        desc = modlist.mod_gui[module_name][el]
+        print(f'{module_name} enable; {el} -> {desc}') 
+        show_param(window, el, desc)
+
+    window['-fname-'].update(text=module_name)
+    return True
+
+
+def set_param(window, param):
+    window['-color1-1'].update(param.color1.ctox())
+    window['-color2-1'].update(param.color2.ctox())
+    window['-color3-1'].update(param.color3.ctox())
+    window['-color_jitter-1'].update(param.color_jitter)
+    window['-sub_jitter-1'].update(param.sub_jitter)
+    window['-sub_jitter2-1'].update(param.sub_jitter2)
+    window['-pwidth-1'].update(param.pwidth)
+    window['-pheight-1'].update(param.pheight)
+    window['-pdepth-1'].update(param.pdepth)
+    window['-fname-'].update(param.file_name())
+
+    window.refresh()
+
+
+result_q = queue.Queue()
+
+def long_task(param, modules, modname):
+    image = modules[modname].generate(param)
+    result_q.put(image)
+
+
+def get_image_thread(window, param, modules, modname):
+    progress = sg.Window('', [[sg.Text('Wait...', text_align='center',
+                                       size=(20,10), background_color='#f0e070')]],
+                         modal=True, no_titlebar=True,
+                         padding_x=5, padding_y=10,
+                         element_justification='c', finalize=True)
+    threading.Thread(
+        target=long_task,
+        args=(param,modules,modname),
+        daemon=True).start()
+    while True:
+        pev, pva = progress.read(timeout=50)
+        if pev is None:
+            image = None
+            break
+        elif  not result_q.empty():
+            image = result_q.get()
+            break
+    progress.close()
+    return image
+
+
+if __name__ == '__main__':
+    modlist = Modules()
+    m = search_modules(modlist)
+    param = Param()
+    
+    param.width = IMAGE_WIDTH
+    param.height = IMAGE_HEIGHT
+    
+    lo = layout(modlist)
+    wn = sg.Window('Wallpaper Factory', layout=lo)
+
+    modname = DEFAULT_MODULE
+    if set_module(wn, modlist, modname):
+        m[modname].default_param(param)
+        param.pattern = modname
+        set_param(wn, param)
+
+    image = m[modname].generate(param)
+    wn['-img-'].update(data=image)
+
+    print('-- main loop --')
+    while True:
+        ev, va = wn.read()
+        # print(ev, isinstance(ev, str), va)
+
+        if ev == sg.WINDOW_CLOSED or ev == 'Exit' or ev == '-done-':
+            break
+        elif ev == 'Save' or ev == '-ok-':
+            fname = param.file_name()
+            if pa.exists(fname):
+                base=param.pattern
+                for i in range(SAVE_NUM-1):
+                    if not pa.exists(f'{base}{i}.png'):
+                        break
+                    elif i == SAVE_NUM-2:
+                        print('Already saved enough...')
+                fname = f'{base}{i}.png'
+            image.save(fname)
+            continue
+        elif ev == '-redo-':
+            image = get_image_thread(wn, param, m, modname)
+            if image is not None:
+                wn['-img-'].update(data=image)
+            else:
+                print("DON'T CLOSE DIALOGUE")
+            continue
+        elif ev in modlist.modules:
+            modname = ev
+            set_module(wn, modlist, modname)
+            param.pattern = modname
+            m[ev].default_param(param)
+            set_param(wn,param)
+
+            image = get_image_thread(wn, param, m, modname)
+            if image is not None:
+                wn['-img-'].update(data=image)
+            else:
+                print("DON'T CLOSE DIALOGUE")
+            continue
+        elif ev in ('-color1-2', '-color2-2', '-color3-2'):
+            s = getattr(param, ev[1:-2]).ctox().upper()
+            if va['event'] != s:
+                setattr(param, ev[1:-2], RGBColor(va['event']))
+                wn[ev[:-1]+'1'].update(s.lower())
+            continue            
+        elif isinstance(ev, str):
+            widg = ev[1:-2]
+            try:
+                s = int(wn[ev].get(),10)
+            except ValueError:
+                s = 0
+            # print( widg )
+            if hasattr(param, widg):
+                t = int(getattr(param, widg))
+                if s != t:
+                    setattr(param, widg, s)
+            else:
+                print('has no attr', ev, 'as', widg)
+            
+            
+
+    wn.close()
+
+                   
