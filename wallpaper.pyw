@@ -1,6 +1,7 @@
 '''wallpaper : 壁紙用シンプル画像生成
 v1.0.0 2025/12/26 stagger-tiled-stripeのパターン生成スクリプト(単発)版
 v2.0.0 2025/12/29 モジュール構成にして、複数のパターン作成に対応
+v2.0.1 2026/01/01 コマンドラインオプションを追加 (.pywだとヘルプが出ない)
 
 協力：Google Gemini; モジュールのアルゴリズム作成支援(numpy使う手があったなんて)
 謝辞：Kujira Handさん; TkEasyGUIがなければGUIアプリにしようと思いませんでした
@@ -10,6 +11,7 @@ v2.0.0 2025/12/29 モジュール構成にして、複数のパターン作成�
 import importlib.util as impl
 import sys
 import os.path as pa
+import argparse
 import glob
 from PIL import Image, ImageDraw
 import random
@@ -23,10 +25,11 @@ IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1080
 SAVE_NUM = 3
 
-def search_modules(modlist: Modules, plugin_path=__file__):
+def search_modules(modlist: Modules, plugin_dir):
     modules = {}
-    
-    plugin_dir = pa.dirname(plugin_path)  # directory part
+
+    if plugin_dir is None:
+        plugin_dir = pa.dirname(__file__)  # directory part
     plugin_pat = 'mod_*.py'  # filename pattern
     
     for modf in glob.glob(plugin_pat, root_dir=plugin_dir):
@@ -34,7 +37,7 @@ def search_modules(modlist: Modules, plugin_path=__file__):
         if modname.startswith('mod_'):
             modname = modname[4:]
         
-        print(modf, '---', modname)
+        # print(modf, '---', modname)
         spec = impl.spec_from_file_location(modname, modf)
         module = impl.module_from_spec(spec)
         sys.modules[modname] = module
@@ -43,10 +46,11 @@ def search_modules(modlist: Modules, plugin_path=__file__):
         if hasattr(module, 'intro'):
             fn = getattr(module, 'intro')
             print( 'module: ', fn(modlist, modname))
-            print(f'Load {modname}')
+            # print(f'Load {modname}')
             modules[modname] = module
 
     return modules
+
 
 # モジュールファイルで作成必要なAPI関数
 #
@@ -76,7 +80,7 @@ def search_modules(modlist: Modules, plugin_path=__file__):
 # (1) モジュールを検索登録する
 # modlist = Modules()
 # p = Param()
-# m = search_modules(modlist, 'mod_*.py')
+# m = search_modules(modlist, plugin_dir)
 #
 # (2) モジュールの関数を呼び出す
 # modlist.modules == [module-name1, module-name2, ...] : 導入したモジュール名
@@ -194,7 +198,7 @@ def set_module(window, modlist, module_name):
     
     for el in modlist.mod_gui[module_name].keys():
         desc = modlist.mod_gui[module_name][el]
-        print(f'{module_name} enable; {el} -> {desc}') 
+        # print(f'{module_name} enable; {el} -> {desc}') 
         show_param(window, el, desc)
 
     window['-fname-'].update(text=module_name)
@@ -245,14 +249,10 @@ def get_image_thread(window, param, modules, modname):
     return image
 
 
-if __name__ == '__main__':
-    modlist = Modules()
-    m = search_modules(modlist)
-    param = Param()
-    
-    param.width = IMAGE_WIDTH
-    param.height = IMAGE_HEIGHT
-    
+def gui_main(modlist: Modules, m, p: Param):
+    '''gui_main(modlist:Modules, dict-module_funcs, p:Parameter)
+        GUI動作メイン処理
+    '''
     lo = layout(modlist)
     wn = sg.Window('Wallpaper Factory', layout=lo)
 
@@ -323,9 +323,69 @@ if __name__ == '__main__':
                     setattr(param, widg, s)
             else:
                 print('has no attr', ev, 'as', widg)
-            
-            
 
     wn.close()
+    return
 
                    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='壁紙ジェネレータ')
+    parser.add_argument('--plugin_dir', help='プラグインフォルダ')
+    parser.add_argument('--list_modules',action='store_true',
+                       help='モジュールリスト表示')
+    parser.add_argument('--module', help='モジュールを起動')
+    parser.add_argument('--width', type=int, help='生成画像幅')
+    parser.add_argument('--height', type=int, help='生成画像高')
+    parser.add_argument('--color1', help='基本色指定')
+    parser.add_argument('--color2', help='追加色指定2')
+    parser.add_argument('--color3', help='追加色指定3')
+    parser.add_argument('--jitter1', type=int, help='変動パラメータ1')
+    parser.add_argument('--jitter2', type=int, help='変動パラメータ2')
+    parser.add_argument('--jitter3', type=int, help='変動パラメータ3')
+    parser.add_argument('--pheight', type=int, help='パターン設定1')
+    parser.add_argument('--pwidth', type=int, help='パターン設定2')
+    parser.add_argument('--pdepth', type=int, help='パターン設定3')
+    parser.add_argument('files', nargs='*')
+    args = parser.parse_args()    
+    
+    modlist = Modules()
+    m = search_modules(modlist, args.plugin_dir)
+    param = Param()
+    
+    param.width = IMAGE_WIDTH if args.width is None else args.width 
+    param.height = IMAGE_HEIGHT if args.height is None else args.height
+
+    if args.list_modules:
+        print('Modules available:')
+        for x in modlist.modules:
+            print(f'{x}: {modlist.mod_desc[x]}')            
+    elif args.module is None:
+        gui_main(modlist, m, param)
+    else:
+        m[args.module].default_param(param)
+        for name in ['color1', 'color2', 'color3',
+                     'jitter1', 'jitter2', 'jitter3',
+                     'pwidth', 'pheight', 'pdepth']:
+            v = getattr(args, name, None)
+            if v is not None:
+                setattr(param, name, v)
+        img = m[args.module].generate(param)
+        print(f'Generated {args.module}')
+        if isinstance(args.files, list):
+            if len(args.files) == 0:
+                img.show()
+                exit()
+            else:
+                f = args.files[0]
+        else:
+            f = args.files 
+        if pa.splitext(f)[1] != '.png':
+            f = pa.splitext(f)[0]+'.png'
+        img.save(f)
+        print(f'Image saved in {f}')
+                
+                
+        
+
+
