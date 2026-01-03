@@ -1,9 +1,16 @@
+'''wallpaper generator 共通クラス＆関数'''
 from dataclasses import dataclass
 from PIL import Image, ImageDraw
 import random
 import numpy as np
 
+def clip8(x: int):
+    '''clip8(x) -> {x | 0 <= x <= 255}に制限する'''
+    return min(255, max(x, 0))
+
+
 class RGBColor:
+    '''色を格納するクラス'''
     def __init__(self, *args):
         self.r, self.g, self.b = self._parse(args)
 
@@ -30,7 +37,7 @@ class RGBColor:
         if not all(isinstance(x, int) for x in (r,g,b)):
             raise ValueError('Parameters must be integer')
 
-        return r & 0xff, g & 0xff, b & 0xff
+        return clip8(r), clip8(g), clip8(b)
 
     def ctox(self):
         return f'#{self.r & 0xff:02x}{self.g & 0xff:02x}{self.b & 0xff:02x}'
@@ -53,14 +60,15 @@ class RGBColor:
         return self.r, self.g, self.b
         
     def itoc(self, r, g, b):
-        self.r = r & 0xff
-        self.g = g & 0xff
-        self.b = b & 0xff
+        self.r = clip8(r)
+        self.g = clip8(g)
+        self.b = clip8(b)
         return self.r, self.g, self.b
 
 
 @dataclass
 class Param:
+    '''モジュールに渡すパラメータ'''
     width: int = 1920
     height: int = 1080
     color1: RGBColor = RGBColor(220,214,96)
@@ -87,6 +95,7 @@ PARAMVALS = ['color1', 'color2', 'color3',
 # 利用パラメータリストは、利用するパラメータ名のリスト(入っているものは利用)
 #  (例) mod_gui['stripe'] = ['color1', 'color_jitter', 'pwidth', ...]
 class Modules:
+    '''プラグインモジュール情報'''
     def __init__(self):
         self.modules = []
         self.mod_desc = {}
@@ -106,8 +115,17 @@ class Modules:
 def rgb_random_jitter(color: RGBColor, jitter):
     '''(R,G,B)に対してそれぞれ±jitterの幅でランダムに変化'''
     rgb = color.ctoi()
-    rgb = tuple((c + random.randint(-jitter, jitter)) & 0xff for c in rgb)
+    rgb = tuple(clip8((c + random.randint(-jitter, jitter))) for c in rgb)
     return RGBColor(rgb)
+
+
+def brightness(color: RGBColor, f=1.0):
+    '''brightness(RGBColor, float) -> RGBColor
+        darken if f < 1.0, lighten if f > 1.0
+    '''
+    f = float(min(256, max(f, 0)))
+    r,g,b = color.ctoi()
+    return RGBColor(int(r * f), int(g * f), int(b * f))
 
 
 def rgb_lerp(c1, c2, t):
@@ -117,7 +135,7 @@ def rgb_lerp(c1, c2, t):
 
 def draw_diagonal_gradient_rgb(draw, width, height,
                                c1: RGBColor, c2: RGBColor):
-    '''斜めグラデーションで塗りつぶし 超遅い
+    '''斜めグラデーションで塗りつぶし (超遅い)
     draw: PIL.ImageDraw
     c1,c2: RGBColor
     '''
@@ -152,11 +170,11 @@ def draw_horizontal_gradient_rgb(draw, width, height,
             
 
 def diagonal_gradient_rgb_np(width, height, color1:RGBColor, color2:RGBColor):
-    """
+    '''
     NumPy で高速に斜めグラデーションを作る
     color1, color2: RGBColor ctoi() -> (r,g,b)
     return: PIL.Image
-    """
+    '''
     # 座標グリッド
     y, x = np.mgrid[0:height, 0:width]
 
@@ -197,8 +215,8 @@ def diagonal_gradient_rgb_np(width, height, color1:RGBColor, color2:RGBColor):
 #
 
 
-# R,G,Bの数値を16進文字列にする
 def rgb_string(*args):
+    '''R,G,Bの数値を16進文字列にする'''
     if len(args) == 1 and isinstance(args[0], (tuple, list)):
         r,g,b = args[0][:3]
     elif len(args) == 3:
@@ -209,24 +227,27 @@ def rgb_string(*args):
     if not all(isinstance(x, int) for x in (r,g,b)):
         raise ValueError('Parameters must be integer')
     
-    return f'#{r & 0xff:02x}{g & 0xff:02x}{b & 0xff:02x}'
+    r = clip8(r)
+    g = clip8(g)
+    b = clip8(b)
+    return f'#{r:02x}{g:02x}{b:02x}'
 
 
-# (r,g,b)もしくは'#rrggbb'を受け取って、r,g,bを返す
 def to_rgb(value):
+    '''(r,g,b)もしくは'#rrggbb'を受け取って、r,g,bを返す'''
     if isinstance(value, tuple):
         if len(value) < 3:
             raise ValueError('Tuple too short')
         r,g,b = value[:3]
         if all(isinstance(x, int) for x in (r,g,b)):
-            return r & 0xff, g & 0xff, b & 0xff
+            return clip8(r), clip8(g), clip8(b)
         else:
             raise ValueError('Tuple has not integer')
     if isinstance(value, str) and len(value) >= 6:
         if value[0] == '#':
             value = value[1:]
         try:
-            rgb = [int(value[i*2:i*2+2], 16) & 0xff for i in range(3)]
+            rgb = [int(value[i*2:i*2+2], 16) for i in range(3)]
             return tuple(rgb)
         except ValueError:
             raise ValueError('Hexadecimal is not correct')

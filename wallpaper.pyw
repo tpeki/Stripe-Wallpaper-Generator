@@ -2,6 +2,7 @@
 v1.0.0 2025/12/26 stagger-tiled-stripeのパターン生成スクリプト(単発)版
 v2.0.0 2025/12/29 モジュール構成にして、複数のパターン作成に対応
 v2.0.1 2026/01/01 コマンドラインオプションを追加 (.pywだとヘルプが出ない)
+v2.0.2 2026/01/03 色選択部品の挙動を修正。ペンローズタイルモジュール追加
 
 協力：Google Gemini; モジュールのアルゴリズム作成支援(numpy使う手があったなんて)
 謝辞：Kujira Handさん; TkEasyGUIがなければGUIアプリにしようと思いませんでした
@@ -157,7 +158,7 @@ def layout(modlist):
     layout = [[sg.Menu(menudef, key='-mnu-')],
               [sg.Text('', key='-modname-'), sg.Text(' '),
                sg.Text('', key='-moddesc-', expand_x=True)],
-              [sg.Image(key='-img-', background_color=(128,128,128),
+              [sg.Image(key='-img-', background_color="#7f7f7f",
                     size=(480,270))],
               [sg.Column(layout=color_column_layout),
                sg.Column(layout=jitter_column_layout),
@@ -205,10 +206,28 @@ def set_module(window, modlist, module_name):
     return True
 
 
+def bg_and_font(color):
+    if isinstance(color,str):
+        rgb = to_rgb(color)
+    elif isinstance(color, RGBColor):
+        rgb = color.ctoi()
+
+    l = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2])/255
+    # ガンマ補正なし,閾値0.89が一般的らしいがおじさんの目にやさしく閾値を低く
+    if l > 0.70:
+        f = '#000000'
+    else:
+        f = '#ffffff'
+    return f, rgb_string(rgb)
+
+
 def set_param(window, param):
-    window['-color1-1'].update(param.color1.ctox())
-    window['-color2-1'].update(param.color2.ctox())
-    window['-color3-1'].update(param.color3.ctox())
+    f,b = bg_and_font(param.color1)
+    window['-color1-1'].update(param.color1.ctox(), text_color=f, bg=b)
+    f,b = bg_and_font(param.color2)
+    window['-color2-1'].update(param.color2.ctox(), text_color=f, bg=b)
+    f,b = bg_and_font(param.color3)
+    window['-color3-1'].update(param.color3.ctox(), text_color=f, bg=b)
     window['-color_jitter-1'].update(param.color_jitter)
     window['-sub_jitter-1'].update(param.sub_jitter)
     window['-sub_jitter2-1'].update(param.sub_jitter2)
@@ -306,9 +325,13 @@ def gui_main(modlist: Modules, m, p: Param):
             continue
         elif ev in ('-color1-2', '-color2-2', '-color3-2'):
             s = getattr(param, ev[1:-2]).ctox().upper()
+            # nc = wn[ev].get()
+            # print(f'ev={ev} value={nc} param value={s}')
             if va['event'] != s:
                 setattr(param, ev[1:-2], RGBColor(va['event']))
-                wn[ev[:-1]+'1'].update(s.lower())
+                f,b = bg_and_font(va['event'])
+                wn[ev[:-1]+'1'].update(va['event'].lower(),text_color=f,
+                                       background=b)
             continue            
         elif isinstance(ev, str):
             widg = ev[1:-2]
