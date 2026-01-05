@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw
 import random
 import numpy as np
+import os.path as pa
 
 def clip8(x: int):
     '''clip8(x) -> {x | 0 <= x <= 255}に制限する'''
@@ -71,6 +72,10 @@ class Param:
     '''モジュールに渡すパラメータ'''
     width: int = 1920
     height: int = 1080
+    wwidth: int = 0  # tk makes automatically
+    wheight: int = 0
+    wposx: int = 0  # tk locates automatically
+    wposy: int = 0
     color1: RGBColor = RGBColor(220,214,96)
     color2: RGBColor = RGBColor(0,0,0)
     color3: RGBColor = RGBColor(0,0,0)
@@ -80,10 +85,22 @@ class Param:
     pwidth: int = 17
     pheight: int = 140
     pdepth: int = 0
-    pattern: str = 'none'  # デフォルトはmodule名を入れるか
+    pattern: str = ''  # module名
+    savefile: str = ''
 
     def file_name(self):
-        return self.pattern + '.png'
+        if len(self.savefile) < 1:
+            self.savefile = self.pattern+'.png'
+        base = pa.splitext(self.savefile)[0]
+        if pa.exists(self.savefile):
+            for i in range(SAVE_NUM-1):
+                if not pa.exists(f'{base}{i}.png'):
+                    break
+                elif i == SAVE_NUM-2:
+                    print('Already saved enough...')
+            fname = f'{base}{i}.png'
+            self.savefile = fname
+        return self.savefile
 
 PARAMVALS = ['color1', 'color2', 'color3',
              'color_jitter', 'sub_jitter', 'sub_jitter2',
@@ -109,6 +126,10 @@ class Modules:
             self.modules.append(module_name)
             self.mod＿desc[module_name] = module_desc
             self.mod_gui[module_name] = using_gui_list
+
+
+def is_param(x:str):
+    return x in PARAMVALS
 
 
 # 背景パターン

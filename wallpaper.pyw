@@ -3,6 +3,8 @@ v1.0.0 2025/12/26 stagger-tiled-stripeのパターン生成スクリプト(単�
 v2.0.0 2025/12/29 モジュール構成にして、複数のパターン作成に対応
 v2.0.1 2026/01/01 コマンドラインオプションを追加 (.pywだとヘルプが出ない)
 v2.0.2 2026/01/03 色選択部品の挙動を修正。ペンローズタイルモジュール追加
+v2.0.3 2026/01/05 Save asダイアログを表示するようにした。
+                  CLIの色指定修正(setattrではstrのまま設定してしまう)
 
 協力：Google Gemini; モジュールのアルゴリズム作成支援(numpy使う手があったなんて)
 謝辞：Kujira Handさん; TkEasyGUIがなければGUIアプリにしようと思いませんでした
@@ -18,6 +20,8 @@ from PIL import Image, ImageDraw
 import random
 from wall_common import *
 import TkEasyGUI as sg
+import tkinter as tk
+from tkinter import filedialog
 import threading
 import queue
 
@@ -158,8 +162,10 @@ def layout(modlist):
     layout = [[sg.Menu(menudef, key='-mnu-')],
               [sg.Text('', key='-modname-'), sg.Text(' '),
                sg.Text('', key='-moddesc-', expand_x=True)],
-              [sg.Image(key='-img-', background_color="#7f7f7f",
-                    size=(480,270))],
+              [sg.Text('',expand_x=True),
+               sg.Image(key='-img-', background_color="#7f7f7f",
+                    size=(480,270), enable_events=True),
+               sg.Text('',expand_x=True)],
               [sg.Column(layout=color_column_layout),
                sg.Column(layout=jitter_column_layout),
                sg.Column(layout=pattern_column_layout, expand_x=True),
@@ -239,6 +245,25 @@ def set_param(window, param):
     window.refresh()
 
 
+def get_savefile(fname):
+    root = tk.Tk()
+    root.withdraw()
+
+    filename = filedialog.asksaveasfilename(
+        title='Save File',
+        initialdir='.',
+        initialfile=fname,
+        filetypes=[("PNG files", "*.png")]
+    )
+
+    return filename
+
+
+def set_window_geom(param:Param, window: sg.Window):
+    param.wwidth, param.wheight = window.get_location()
+    param.wposx, param.wposy = window.get_size()
+    
+
 result_q = queue.Queue()
 
 def long_task(param, modules, modname):
@@ -268,12 +293,13 @@ def get_image_thread(window, param, modules, modname):
     return image
 
 
-def gui_main(modlist: Modules, m, p: Param):
+def gui_main(modlist: Modules, m, param: Param):
     '''gui_main(modlist:Modules, dict-module_funcs, p:Parameter)
         GUI動作メイン処理
     '''
     lo = layout(modlist)
     wn = sg.Window('Wallpaper Factory', layout=lo)
+    set_window_geom(param, wn)
 
     modname = DEFAULT_MODULE
     if set_module(wn, modlist, modname):
@@ -287,21 +313,18 @@ def gui_main(modlist: Modules, m, p: Param):
     print('-- main loop --')
     while True:
         ev, va = wn.read()
+        set_window_geom(param, wn)
         # print(ev, isinstance(ev, str), va)
 
         if ev == sg.WINDOW_CLOSED or ev == 'Exit' or ev == '-done-':
             break
         elif ev == 'Save' or ev == '-ok-':
+            base=param.pattern
             fname = param.file_name()
-            if pa.exists(fname):
-                base=param.pattern
-                for i in range(SAVE_NUM-1):
-                    if not pa.exists(f'{base}{i}.png'):
-                        break
-                    elif i == SAVE_NUM-2:
-                        print('Already saved enough...')
-                fname = f'{base}{i}.png'
+            fname = get_savefile(fname)
             image.save(fname)
+            param.savefile = fname
+            wn['-fname-'].update(pa.basename(param.savefile))
             continue
         elif ev == '-redo-':
             image = get_image_thread(wn, param, m, modname)
@@ -314,6 +337,7 @@ def gui_main(modlist: Modules, m, p: Param):
             modname = ev
             set_module(wn, modlist, modname)
             param.pattern = modname
+            param.savefile = ''
             m[ev].default_param(param)
             set_param(wn,param)
 
@@ -325,21 +349,25 @@ def gui_main(modlist: Modules, m, p: Param):
             continue
         elif ev in ('-color1-2', '-color2-2', '-color3-2'):
             s = getattr(param, ev[1:-2]).ctox().upper()
-            # nc = wn[ev].get()
-            # print(f'ev={ev} value={nc} param value={s}')
             if va['event'] != s:
                 setattr(param, ev[1:-2], RGBColor(va['event']))
                 f,b = bg_and_font(va['event'])
                 wn[ev[:-1]+'1'].update(va['event'].lower(),text_color=f,
                                        background=b)
-            continue            
+            continue
+        elif ev == '-img-' and va['event_type'] == 'mousedown':
+            # print('-img-', ev, va)
+            if hasattr(m[modname], 'desc'):
+                m[modname].desc(param)
         elif isinstance(ev, str):
             widg = ev[1:-2]
+            # print( widg )
+            if not is_param(widg):
+                continue
             try:
                 s = int(wn[ev].get(),10)
             except ValueError:
                 s = 0
-            # print( widg )
             if hasattr(param, widg):
                 t = int(getattr(param, widg))
                 if s != t:
@@ -387,12 +415,16 @@ if __name__ == '__main__':
         gui_main(modlist, m, param)
     else:
         m[args.module].default_param(param)
-        for name in ['color1', 'color2', 'color3',
-                     'jitter1', 'jitter2', 'jitter3',
+        for name in ['jitter1', 'jitter2', 'jitter3',
                      'pwidth', 'pheight', 'pdepth']:
             v = getattr(args, name, None)
             if v is not None:
                 setattr(param, name, v)
+        for name in ['color1', 'color2', 'color3']:
+            v = getattr(args, name, None)
+            if v is not None:
+                setattr(param, name, RGBColor(v))  # strのままじゃ駄目
+
         img = m[args.module].generate(param)
         print(f'Generated {args.module}')
         if isinstance(args.files, list):

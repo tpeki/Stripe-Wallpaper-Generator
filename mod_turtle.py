@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 import random
+import TkEasyGUI as sg
 from wall_common import *
 
 # --- 定数設定 ---
@@ -8,6 +9,7 @@ BG_COLOR = (0x88, 0x88, 0x88)  # 背景色
 PEN_WIDTH = 40  # ペン幅
 PEN_STEP = 10
 BACK_JITTER = 50  # 背景色の最大変化幅
+INTRCTV = 1
 
 #CMD = '200,100J2R10FR5F255,255,0C200,400J2H10FR5F'
 CMD = '65z130,210jfrfr2frfr2frfr2flflf2l4f'\
@@ -17,15 +19,17 @@ CMD = '65z130,210jfrfr2frfr2frfr2flflf2l4f'\
       '200,670j52p255,127,64c2h"Hope your year is "'\
       '250,800j"filled with many "248,64,64c"happy "255,127,64c"moments!"'\
       '1600,950j5p4z255,255,88c2h4f4r2f2l6fu2l4fdn6f2r2frfrfrfr2f'\
-      'u3l3fl2fdn6fu4r3fd3l3fu4r3fd2l3f'     
-      
+      'u3l3fl2fdn6fu4r3fd3l3fu4r3fd2l3f'
+
+tur_preserve = {'cmd': ''}
 
 # module基本情報
 def intro(modlist: Modules, module_name):
     modlist.add_module(module_name, '年賀(似非タートル)',
                        {'color1':'ペン色','color2':'背景基本色',
                         'color_jitter':'背景色変化',
-                        'pwidth':'ペン幅', 'pheight':'ステップ幅'})
+                        'pwidth':'ペン幅', 'pheight':'ステップ幅',
+                        'pdepth':'対話型=0'})
     return module_name
 
 
@@ -36,8 +40,29 @@ def default_param(p: Param):
     p.color_jitter = BACK_JITTER
     p.pwidth = PEN_WIDTH
     p.pheight = PEN_STEP
+    p.pdepth = INTRCTV
 
     return p
+
+
+def desc(p: Param):
+    posx = p.wwidth
+    posy = p.wheight + p.wposy
+
+    layout=[[sg.Multiline(tur_preserve['cmd'], readonly=True,
+                          text_color='#000000', background_color='#f0eea0',
+                          text_align='left', size=(60,10), expand_x=True)],
+            [sg.Text('',expand_x=True), sg.Button('Close',key='-d_close-'),
+             sg.Text('',expand_x=True)]]
+    sdialog = sg.Window('Command String', layout=layout,
+                        location=(posx,posy), padding_x=0, padding_y=0,
+                        grab_anywhere=True)
+
+    while True:
+        ev,va = sdialog.read()
+        if ev == '-d_close-':
+            break
+    sdialog.close()
 
 
 '''
@@ -324,6 +349,32 @@ def turtle_draw(draw, turtle, cmds, verbose=False):
             except KeyError:
                 pass
             ptr += 1
+            
+    # interpreter end
+
+
+def edit_layout():
+    test_pane = [sg.Image(key='-t_test-', size=(640,360),
+                          background_color='gray')
+                 ]
+    command_pane = [sg.Multiline(key='-t_cmds-', enable_events=True,
+                                 enable_key_events=True, size=(80,10),
+                                 text_color='black', background_color='white',
+                                 text_align='left',
+                                 expand_x=True, expand_y=True)
+                    ]
+    buttons = [[sg.Text('Pattern No.'),
+                sg.Input('1', text_align='right', size=(2,1), key='-t_no-'),
+                sg.Text('', expand_x=True),
+                sg.Button('Clear', key='-t_clr-'),
+                sg.Button('Load', key='-t_ld-'),
+                sg.Button('Test', key='-t_tst-'),
+                sg.Text(' ', expand_x=True),
+                sg.Button('Save', key='-t_sv-')]]
+    layout = [test_pane, comand_pane, buttons]                
+
+    return layout
+
 
 def generate(p: Param):
     """
@@ -338,9 +389,17 @@ def generate(p: Param):
     pen_step = p.pheight
     start_x = p.width // 2
     start_y = p.height // 2
-
+    intrctv = p.pdepth == 0
+    
     turtle = Turtle(size=pen_size, step=pen_step, color=pen_color,
                     x=start_x, y=start_y)
+
+    if intrctv:
+        print('Coming soon.')
+        # cmd = interactive_dialog(p)
+        cmd = CMD
+    else:
+        cmd = CMD
 
     # 描画イメージの生成・背景作成
     bg_start = rgb_random_jitter(bg_color, jitter)
@@ -348,9 +407,9 @@ def generate(p: Param):
     image = diagonal_gradient_rgb_np(width, height,
                                      bg_start, bg_end)
     draw = ImageDraw.Draw(image)
-    
-    
-    turtle_draw(draw, turtle, CMD, verbose=False)
+        
+    turtle_draw(draw, turtle, cmd, verbose=False)
+    tur_preserve['cmd'] = cmd
 
     return image
     
@@ -360,6 +419,7 @@ if __name__ == '__main__':
     p = default_param(p)
     p.width = 1920
     p.height = 1080
+    
 
     print(f'\n==========\nParameters = {p}\n==========\n')
     
@@ -368,4 +428,4 @@ if __name__ == '__main__':
 
 # TODO
 #  Gemini先生も言っていたが、繰り返し処理区間の定義"{","}"と、
-# 条件判断"?"を追加したい。
+# 条件判断break"!"を追加したい。
