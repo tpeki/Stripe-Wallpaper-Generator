@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw
 import random
 import numpy as np
 import os.path as pa
+import colorsys
 
 def clip8(x: int):
     '''clip8(x) -> {x | 0 <= x <= 255}に制限する'''
@@ -66,6 +67,8 @@ class RGBColor:
         self.b = clip8(b)
         return self.r, self.g, self.b
 
+
+SAVE_NUM=9
 
 @dataclass
 class Param:
@@ -140,14 +143,26 @@ def rgb_random_jitter(color: RGBColor, jitter):
     return RGBColor(rgb)
 
 
-def brightness(color: RGBColor, f=1.0):
+def brightness(color: RGBColor, f=1.0, bg=None):
     '''brightness(RGBColor, float) -> RGBColor
         darken if f < 1.0, lighten if f > 1.0
     '''
-    f = float(min(256, max(f, 0)))
-    r,g,b = color.ctoi()
-    return RGBColor(int(r * f), int(g * f), int(b * f))
+    crgb = color.ctoi()
+    r_norm, g_norm, b_norm = [c / 255.0 for c in crgb]
+    h, l, s = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
+    
+    new_l = max(0.0, min(1.0, l*f))
+    r_new, g_new, b_new = colorsys.hls_to_rgb(h, new_l, s)
 
+    if r_new+g_new+b_new <= 0.0:
+        if bg is not None:
+            return bg
+        else:
+            return RGBColor(0,0,0) if bg is None else bg
+
+    return RGBColor(round(r_new * 255),
+                    round(g_new * 255),
+                    round(b_new * 255))
 
 def rgb_lerp(c1, c2, t):
     ''' RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)'''
