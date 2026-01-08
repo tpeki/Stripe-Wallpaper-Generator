@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image, ImageDraw
 from wall_common import *
+import random
 
 # --- Global 変数の設定 ---
 ITERATION = 6                  # 再帰の深さ（次数）
@@ -21,8 +22,11 @@ def intro(modlist: Modules, module_name):
 
 def default_param(p: Param):
     '''おすすめパラメータ'''
-    p.color1.itoc(*LINE_COLOR)
-    p.color2.itoc(*BG_COLOR)
+    # p.color1.itoc(*LINE_COLOR)
+    # p.color2.itoc(*BG_COLOR)
+    r,g,b = [random.randint(0,255) for x in range(3)]
+    p.color1 = RGBColor(r,g,b)
+    p.color2 = RGBColor(255-r, 255-g, 255-b)
     p.pwidth = LINE_WIDTH
     p.pheight = ITERATION
     p.color_jitter = JITTER
