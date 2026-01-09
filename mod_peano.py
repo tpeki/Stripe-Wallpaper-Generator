@@ -96,7 +96,7 @@ def generate(p: Param):
     # 3. 描画＋背景を作成
     bg_start = rgb_random_jitter(bg_color, jitter)
     bg_end   = rgb_random_jitter(bg_color, jitter)
-    image = diagonal_gradient_rgb_np(canvas_size[0], canvas_size[1],
+    image = diagonal_gradient_rgb(canvas_size[0], canvas_size[1],
                                      bg_start, bg_end)
     draw = ImageDraw.Draw(image)
     

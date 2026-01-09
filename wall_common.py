@@ -8,7 +8,7 @@ import colorsys
 
 def clip8(x: int):
     '''clip8(x) -> {x | 0 <= x <= 255}に制限する'''
-    return min(255, max(x, 0))
+    return min(255, max(int(x), 0))
 
 
 class RGBColor:
@@ -143,79 +143,83 @@ def rgb_random_jitter(color: RGBColor, jitter):
     return RGBColor(rgb)
 
 
-def brightness(color: RGBColor, f=1.0, bg=None):
-    '''brightness(RGBColor, float) -> RGBColor
-        darken if f < 1.0, lighten if f > 1.0
+def brightness(color: RGBColor, f=1.0, h=0.0, s=1.0, bg=None):
+    '''色をHSL値で調整 → retruns: RGBColor
+    f: lightness darken if f < l.0, lighten if f > 1.0 (multiply)
+    s: satulation cahge in s (multiply)
+    h: hue change in h (add)
+    bg: returns default color when result is (0,0,0)
     '''
     crgb = color.ctoi()
     r_norm, g_norm, b_norm = [c / 255.0 for c in crgb]
-    h, l, s = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
-    
-    new_l = max(0.0, min(1.0, l*f))
-    r_new, g_new, b_new = colorsys.hls_to_rgb(h, new_l, s)
+    ch, cl, cs = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
+
+    new_h = ch+h if (ch+h)<=1.0 else round(ch+h - int(ch+h),6) 
+    new_l = max(0.0, min(1.0, cl*f))
+    new_s = max(0.0, min(1.0, cs*s))
+    r_new, g_new, b_new = colorsys.hls_to_rgb(new_h, new_l, new_s)
 
     if r_new+g_new+b_new <= 0.0:
-        if bg is not None:
-            return bg
-        else:
-            return RGBColor(0,0,0) if bg is None else bg
+        return bg if isinstance(bg, RGBColor) else RGBColor(0,0,0)
 
     return RGBColor(round(r_new * 255),
                     round(g_new * 255),
                     round(b_new * 255))
+
 
 def rgb_lerp(c1, c2, t):
     ''' RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)'''
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
 
-def draw_diagonal_gradient_rgb(draw, width, height,
-                               c1: RGBColor, c2: RGBColor):
-    '''斜めグラデーションで塗りつぶし (超遅い)
-    draw: PIL.ImageDraw
-    c1,c2: RGBColor
-    '''
-    max_d = width + height
-    cc1 = c1.ctoi()
-    cc2 = c2.ctoi()
-
-    for y in range(height):
-        for x in range(width):
-            t = (x + y) / max_d
-            color = rgb_lerp(cc1, cc2, t)
-            draw.point((x, y), fill=color)
-
-
-def draw_horizontal_gradient_rgb(draw, width, height,
-                                 c1: RGBColor, c2: RGBColor):
-    '''縦グラデーションで塗りつぶし
-    draw: PIL.ImageDraw
-    c1,c2: RGBColor
-    '''
-    max_d = height
-    cc1 = c1.ctoi()
-    cc2 = c2.ctoi()
-    pen = 10
-    tick = int(pen/2)-1
-
-    for y in range(int(height/pen)):
-            t = y*pen/max_d
-            color = rgb_lerp(cc1, cc2, t)
-            draw.line((0, y*pen+tick, width-1, y*pen+tick),
-                      fill=color, width=pen)
+# def draw_vertical_gradient_rgb(draw, width, height,
+#                                  c1: RGBColor, c2: RGBColor):
+#     '''縦グラデーションで塗りつぶし
+#     draw: PIL.ImageDraw
+#     c1,c2: RGBColor
+#     '''
+#     max_d = height
+#     cc1 = c1.ctoi()
+#     cc2 = c2.ctoi()
+#     pen = 10
+#     tick = int(pen/2)-1
+# 
+#     for y in range(int(height/pen)):
+#             t = y*pen/max_d
+#             color = rgb_lerp(cc1, cc2, t)
+#             draw.line((0, y*pen+tick, width-1, y*pen+tick),
+#                       fill=color, width=pen)
             
 
-def diagonal_gradient_rgb_np(width, height, color1:RGBColor, color2:RGBColor):
+def vertical_gradient_rgb(width, height, cstart:RGBColor, cend:RGBColor):
+    cs = cstart.ctoi()  # 開始色 (上)
+    ce = cend.ctoi()    # 終端色 (下)
+    
+    y_axis = np.linspace(0, 1, height).reshape(-1, 1)
+    r = np.tile(y_axis, (1, width))
+    r, g, b = [(cs[i] * (1 - r) + ce[i] * r) for i in range(3)]
+    
+    return Image.fromarray(np.dstack((r, g, b)).astype(np.uint8), 'RGB')
+
+
+def horizontal_gradient_rgb(width, height, cstart:RGBColor, cend:RGBColor):
+    cs = cstart.ctoi()  # 開始色(左)を(r,g,b)に変換
+    ce = cend.ctoi()  # 終端色(右)を(r,g,b)に変換
+    
+    x_axis = np.linspace(0, 1, width)
+    r = np.tile(x_axis, (height, 1))
+    r,g,b = [(cs[i] * (1 - r) + ce[i] * r) for i in range(3)]
+    return Image.fromarray(np.dstack((r, g, b)).astype(np.uint8), 'RGB')
+
+
+def diagonal_gradient_rgb(width, height, color1:RGBColor, color2:RGBColor):
     '''
     NumPy で高速に斜めグラデーションを作る
     color1, color2: RGBColor ctoi() -> (r,g,b)
     return: PIL.Image
     '''
-    # 座標グリッド
-    y, x = np.mgrid[0:height, 0:width]
-
-    # 正規化パラメータ t
-    t = (x + y) / (width + height)
+    y, x = np.mgrid[0:height, 0:width]  # 座標グリッド
+    t = (x + y) / (width + height)  # 正規化パラメータ t
 
     # RGB を配列化
     c1 = color1.ctoi()
@@ -231,24 +235,11 @@ def diagonal_gradient_rgb_np(width, height, color1:RGBColor, color2:RGBColor):
 
 
 # グラデーション背景の生成テンプレ
-# [Diagonal]
 #   bg_start = rgb_random_jitter(bg_color, jitter)
 #   bg_end   = rgb_random_jitter(bg_color, jitter)
 #   image = diagonal_gradient_rgb_np(width, height,
 #                                    bg_start, bg_end)
 #   draw = ImageDraw.Draw(image)
-#
-# [Horizontal]
-#
-#   image = Image.new("RGB", canvas_size)
-#   draw = ImageDraw.Draw(image)
-#
-#   bg_start = rgb_random_jitter(bg_color, jitter)
-#   bg_end   = rgb_random_jitter(bg_color, jitter)
-#
-#   draw_horizontal_gradient_rgb(draw, canvas_size[0], canvas_size[1],
-#                              bg_start, bg_end)
-#
 
 
 def rgb_string(*args):

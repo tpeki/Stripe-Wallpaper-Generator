@@ -404,8 +404,7 @@ def generate(p: Param):
     # 描画イメージの生成・背景作成
     bg_start = rgb_random_jitter(bg_color, jitter)
     bg_end   = rgb_random_jitter(bg_color, jitter)
-    image = diagonal_gradient_rgb_np(width, height,
-                                     bg_start, bg_end)
+    image = diagonal_gradient_rgb(width, height, bg_start, bg_end)
     draw = ImageDraw.Draw(image)
         
     turtle_draw(draw, turtle, cmd, verbose=False)

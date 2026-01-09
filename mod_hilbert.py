@@ -112,18 +112,10 @@ def generate(p: Param):
     # 3. 描画＋背景を作成
     bg_start = rgb_random_jitter(bg_color, jitter)
     bg_end   = rgb_random_jitter(bg_color, jitter)
-    image = diagonal_gradient_rgb_np(canvas_size[0], canvas_size[1],
+    image = diagonal_gradient_rgb(canvas_size[0], canvas_size[1],
                                      bg_start, bg_end)
     draw = ImageDraw.Draw(image)
 
-    # 水平グラデーション
-    # bg_start = rgb_random_jitter(bg_color, jitter)
-    # bg_end   = rgb_random_jitter(bg_color, jitter)
-    # image = Image.new("RGB", canvas_size)
-    # draw = ImageDraw.Draw(image)
-    # draw_horizontal_gradient_rgb(draw, canvas_size[0], canvas_size[1],
-    #                              bg_start, bg_end)
-    
     # ヒルベルト曲線を一気に描画
     if iteration > 5:
         draw.line([tuple(p) for p in points], fill=line_color,
