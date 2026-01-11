@@ -48,8 +48,21 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 - 基本は数値を積む、コマンドで消費して結果を積む、という動きになります。
 -コマンド一覧は mod_turtle の中にコメントで入れてあります。
 
+## モジュール
+- chevron: ギザギザボーダー
+- hexmap: グラデ六角タイル
+- hexmaze: 森の六角迷路
+- hilbert: ヒルベルト曲線
+- packingbubble: グラデーション円
+- peano: ペアノ曲線
+- penrose: ペンローズタイル
+- stripe: 縦ストライプ・モダン
+- turtle: タートルコマンド描画
+- waves: 青海波
+
 ## 謝辞
 作成にあたり、Google Geminiに生成部分のコーディングなど大幅に支援いただきました。
 Microsoftさん、Windowsスポットライトのあまりの鬱陶しさにこんなツールを作るモチベーションが湧きました。
 KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。これがなければGUI化は考えませんでした。
+
 
