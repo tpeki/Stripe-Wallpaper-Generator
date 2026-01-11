@@ -1,4 +1,4 @@
-# stripes.pyw		壁紙用のシンプルなイメージを生成する
+# wallpaper.pyw		壁紙用のシンプルなイメージを生成する
 V2.0.5  2026/01/11
 
 ## 概要
@@ -64,6 +64,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 作成にあたり、Google Geminiに生成部分のコーディングなど大幅に支援いただきました。
 Microsoftさん、Windowsスポットライトのあまりの鬱陶しさにこんなツールを作るモチベーションが湧きました。
 KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。これがなければGUI化は考えませんでした。
+
 
 
 
