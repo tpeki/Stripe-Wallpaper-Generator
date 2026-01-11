@@ -101,24 +101,21 @@ def layout(modlist):
     
     color_column_layout = [[sg.Text('Base Color:', key='-color1-0',
                                     size=(8,1)),
-                            sg.Text('#------', key='-color1-1',
-                                    size=(8,1)),
-                            sg.ColorBrowse('...', key='-color1-2',
-                                           enable_events=True)
+                            sg.Text('0,0,0', key='-color1-1',
+                                    size=(9,1)),
+                            sg.Button('...', key='-color1-2')
                             ],
                            [sg.Text('Second Color:', key='-color2-0',
                                     size=(8,1)),
-                            sg.Text('#------', key='-color2-1',
-                                    size=(8,1)),
-                            sg.ColorBrowse('...', key='-color2-2',
-                                           enable_events=True)
+                            sg.Text('0,0,0', key='-color2-1',
+                                    size=(9,1)),
+                            sg.Button('...', key='-color2-2')
                             ],
                            [sg.Text('Third Color:', key='-color3-0',
                                     size=(8,1)),
-                            sg.Text('#------', key='-color3-1',
-                                    size=(8,1)),
-                            sg.ColorBrowse('...', key='-color3-2',
-                                           enable_events=True)
+                            sg.Text('0,0,0', key='-color3-1',
+                                    size=(9,1)),
+                            sg.Button('...', key='-color3-2')
                             ]]
     jitter_column_layout = [[sg.Text('Color Mod1:', key='-color_jitter-0',
                                     size=(10,1)),
@@ -228,12 +225,15 @@ def bg_and_font(color):
 
 
 def set_param(window, param):
-    f,b = bg_and_font(param.color1)
-    window['-color1-1'].update(param.color1.ctox(), text_color=f, bg=b)
-    f,b = bg_and_font(param.color2)
-    window['-color2-1'].update(param.color2.ctox(), text_color=f, bg=b)
-    f,b = bg_and_font(param.color3)
-    window['-color3-1'].update(param.color3.ctox(), text_color=f, bg=b)
+    fg,bg = bg_and_font(param.color1)
+    r,g,b = param.color1.ctoi()
+    window['-color1-1'].update(f'{r},{g},{b}', text_color=fg, bg=bg)
+    fg,bg = bg_and_font(param.color2)
+    r,g,b = param.color2.ctoi()
+    window['-color2-1'].update(f'{r},{g},{b}', text_color=fg, bg=bg)
+    fg,bg = bg_and_font(param.color3)
+    r,g,b = param.color3.ctoi()
+    window['-color3-1'].update(f'{r},{g},{b}', text_color=fg, bg=bg)
     window['-color_jitter-1'].update(param.color_jitter)
     window['-sub_jitter-1'].update(param.sub_jitter)
     window['-sub_jitter2-1'].update(param.sub_jitter2)
@@ -349,12 +349,14 @@ def gui_main(modlist: Modules, m, param: Param):
             continue
         elif ev in ('-color1-2', '-color2-2', '-color3-2'):
             s = getattr(param, ev[1:-2]).ctox().upper()
-            if va['event'] != s:
-                setattr(param, ev[1:-2], RGBColor(va['event']))
-                f,b = bg_and_font(va['event'])
-                wn[ev[:-1]+'1'].update(va['event'].lower(),text_color=f,
-                                       background=b)
-            continue
+            new_color = sg.popup_color(default_color=s)
+            if new_color.upper() != s:
+                setattr(param, ev[1:-2], RGBColor(new_color))
+                fg,bg = bg_and_font(new_color)
+                r,g,b = to_rgb(bg)
+                wn[ev[:-1]+'1'].update(f'{r},{g},{b}',text_color=fg,
+                                       background=bg)
+            continue            
         elif ev == '-img-' and va['event_type'] == 'mousedown':
             # print('-img-', ev, va)
             if hasattr(m[modname], 'desc'):
