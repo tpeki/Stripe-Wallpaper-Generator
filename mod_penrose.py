@@ -8,7 +8,7 @@ TILE2_COLOR = (0xdd, 0xff, 0xaa)
 LINE_COLOR = (0x88, 0x88, 0x88)
 JITTER1 = 15
 JITTER2 = 15
-LINE_HIDE = 0
+LINE_HIDE = 1
 ITERATIONS = 6
 PAINTING = 0
 
@@ -19,8 +19,7 @@ def intro(modlist: Modules, module_name):
                        {'color1':'色1', 'color2':'色2',
                         'color3':'線色',
                         'color_jitter':'色1変化', 'sub_jitter':'色2変化',
-                        'sub_jitter2': '線消去=1)',
-                        'pwidth':'次数', 'pheight':'塗り=0/1'})
+                        'pwidth':'次数', 'pheight':'形状(0..2)'})
     return module_name
 
 
@@ -31,9 +30,11 @@ def default_param(p: Param):
     p.color3.itoc(*LINE_COLOR)
     p.color_jitter = JITTER1
     p.sub_jitter = JITTER2
-    p.sub_jitter2 = LINE_HIDE
     p.pwidth = ITERATIONS
-    p.pheight = PAINTING
+    p.pheight = np.clip(PAINTING*2 + LINE_HIDE, 0, 2)
+    # フラット線なしは除外
+    # 元 LINEHIDE(0線あり/1線なし), PAINTING(0フラット/1濃淡)
+    # 元 PAINTING(0濃淡/2フラット), LINEHIDE(0線あり/1線なし) 
     return p
 
 
@@ -109,7 +110,7 @@ def draw_pattern0(draw, triangles, color1, jitter1,
 
     c1 = rgb_random_jitter(color1, jitter1).ctox()
     c2 = rgb_random_jitter(color2, jitter2).ctox()
-    print(f'c1:{c1}({color1.ctox()}), c2:{c2}({color2.ctox()})')
+    # print(f'c1:{c1},c2:{c2}')
 
     for color, A, B, C in triangles:
         # 内部の塗り分けパターンを取得
@@ -142,7 +143,8 @@ def generate(p: Param):
     width = p.width
     height = p.height
     c3 = p.color3.ctox()  # RGBColor -> "#rrggbb"
-    hide_outline = p.sub_jitter2 != 0
+    p.pheight = np.clip(p.pheight, 0, 2)
+    hide_outline = p.pheight & 0x01  # 分割線あり
     iterations = p.pwidth
 
     triangles = generate_triangles(width, height, iterations)
@@ -150,10 +152,10 @@ def generate(p: Param):
     img = Image.new("RGB", (width, height), c3)
     draw = ImageDraw.Draw(img)
 
-    if p.pheight != 0:
+    if (p.pheight & 0x02) == 0: # 濃淡
         draw_pattern1(draw, triangles, p.color1, p.color_jitter,
                       p.color2, p.sub_jitter, c3, hide_outline)
-    else:
+    else:  # フラット
         draw_pattern0(draw, triangles, p.color1, p.color_jitter,
                       p.color2, p.sub_jitter, c3, hide_outline)
 

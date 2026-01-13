@@ -70,7 +70,8 @@ def draw_arc(draw, center, radius, counts, width=0, scale=100,
     if grad != 0:
         for i in range(counts):
             amount = max(100+i*grad, 0)
-            col[i] = brightness(RGBColor(col[0]), amount/100, bg).ctoi()
+            col[i] = brightness(RGBColor(col[0]), f=amount/100,
+                                bg=bg).ctoi()
     # print(f'Colors: {col}')
 
     bbox = (center[0]-radius, center[1]-radius*2*(scale/100),

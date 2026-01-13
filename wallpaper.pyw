@@ -177,9 +177,12 @@ def hide_param(window, param):
         k = f'-{param}-{x}'
         try:
             window[k].set_disabled(True)
+            window[k].update('')
         except KeyError:
             pass
-        window[f'-{param}-0'].update('')
+    if param in ('color1', 'color2', 'color3'):
+        window[f'-{param}-1'].update(text_color='#000000', bg='#f0f0f0')
+        window[f'-{param}-2'].update('  ')        
 
 
 def show_param(window, param, desc):
@@ -188,7 +191,9 @@ def show_param(window, param, desc):
             window[f'-{param}-{x}'].set_disabled(False)
         except KeyError:
             pass
-        window[f'-{param}-0'].update(desc)
+    window[f'-{param}-0'].update(desc)
+    if param in ('color1', 'color2', 'color3'):
+        window[f'-{param}-2'].update('...')        
 
 
 def set_module(window, modlist, module_name):
@@ -224,24 +229,24 @@ def bg_and_font(color):
     return f, rgb_string(rgb)
 
 
-def set_param(window, param):
-    fg,bg = bg_and_font(param.color1)
-    r,g,b = param.color1.ctoi()
-    window['-color1-1'].update(f'{r},{g},{b}', text_color=fg, bg=bg)
-    fg,bg = bg_and_font(param.color2)
-    r,g,b = param.color2.ctoi()
-    window['-color2-1'].update(f'{r},{g},{b}', text_color=fg, bg=bg)
-    fg,bg = bg_and_font(param.color3)
-    r,g,b = param.color3.ctoi()
-    window['-color3-1'].update(f'{r},{g},{b}', text_color=fg, bg=bg)
-    window['-color_jitter-1'].update(param.color_jitter)
-    window['-sub_jitter-1'].update(param.sub_jitter)
-    window['-sub_jitter2-1'].update(param.sub_jitter2)
-    window['-pwidth-1'].update(param.pwidth)
-    window['-pheight-1'].update(param.pheight)
-    window['-pdepth-1'].update(param.pdepth)
+def set_param(window, param, mod_gui):
+    for elem in PARAMVALS:
+        if elem in mod_gui:
+            if elem in ('color1','color2','color3'):
+                colr = getattr(param, elem)
+                fg,bg = bg_and_font(colr)
+                r,g,b = colr.ctoi()
+                window[f'-{elem}-1'].update(f'{r},{g},{b}',
+                                            text_color=fg, bg=bg)
+            else:
+                try:
+                    window[f'-{elem}-1'].update(getattr(param,elem))
+                except KeyError:
+                    pass
+        else:
+            hide_param(window, elem)
+            
     window['-fname-'].update(param.file_name())
-
     window.refresh()
 
 
@@ -305,7 +310,7 @@ def gui_main(modlist: Modules, m, param: Param):
     if set_module(wn, modlist, modname):
         m[modname].default_param(param)
         param.pattern = modname
-        set_param(wn, param)
+        set_param(wn, param, modlist.mod_gui[modname])
 
     image = m[modname].generate(param)
     wn['-img-'].update(data=image)
@@ -339,7 +344,7 @@ def gui_main(modlist: Modules, m, param: Param):
             param.pattern = modname
             param.savefile = ''
             m[ev].default_param(param)
-            set_param(wn,param)
+            set_param(wn,param, modlist.mod_gui[modname])
 
             image = get_image_thread(wn, param, m, modname)
             if image is not None:
@@ -380,10 +385,8 @@ def gui_main(modlist: Modules, m, param: Param):
     wn.close()
     return
 
-                   
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='壁紙ジェネレータ')
+
+def args_set(parser):
     parser.add_argument('--plugin_dir', help='プラグインフォルダ')
     parser.add_argument('--list_modules',action='store_true',
                        help='モジュールリスト表示')
@@ -400,10 +403,18 @@ if __name__ == '__main__':
     parser.add_argument('--pwidth', type=int, help='パターン設定2')
     parser.add_argument('--pdepth', type=int, help='パターン設定3')
     parser.add_argument('files', nargs='*')
+    
+                   
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='壁紙ジェネレータ')
+    args_set(parser)
     args = parser.parse_args()    
     
     modlist = Modules()
     m = search_modules(modlist, args.plugin_dir)
+    # print(modlist, '\n=========')
+
     param = Param()
     
     param.width = IMAGE_WIDTH if args.width is None else args.width 

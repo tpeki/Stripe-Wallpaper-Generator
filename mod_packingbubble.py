@@ -84,7 +84,7 @@ def generate(p: Param):
     
     placed_circles = [] # (cx, cy, r)
     
-    print("Packing circles...")
+    # print("Packing circles...")
     # 大きいサイズから順に隙間を埋めていく戦略
     # これにより効率的に画面が埋まる
     current_r = max_r
@@ -124,7 +124,7 @@ def generate(p: Param):
         # 現在のサイズで置けなくなったら半径を小さくして続行
         current_r -= 2 
 
-    print(f"Total circles placed: {len(placed_circles)}")
+    # print(f"Total circles placed: {len(placed_circles)}")
     return img
 
 if __name__ == '__main__':
