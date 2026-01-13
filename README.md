@@ -49,7 +49,9 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 -コマンド一覧は mod_turtle の中にコメントで入れてあります。
 
 ## モジュール
+- bias: 斜め帯
 - chevron: ギザギザボーダー
+- gangi: 階段
 - hexmap: グラデ六角タイル
 - hexmaze: 森の六角迷路
 - hilbert: ヒルベルト曲線
@@ -64,6 +66,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 作成にあたり、Google Geminiに生成部分のコーディングなど大幅に支援いただきました。
 Microsoftさん、Windowsスポットライトのあまりの鬱陶しさにこんなツールを作るモチベーションが湧きました。
 KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。これがなければGUI化は考えませんでした。
+
 
 
 
