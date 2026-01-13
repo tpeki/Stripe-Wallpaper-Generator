@@ -278,8 +278,9 @@ def long_task(param, modules, modname):
 
 def get_image_thread(window, param, modules, modname):
     progress = sg.Window('', [[sg.Text('Wait...', text_align='center',
-                                       size=(20,10), background_color='#f0e070')]],
-                         modal=True, no_titlebar=True,
+                                       size=(20,10), 
+                                       background_color='#f0e070')]],
+                         modal=True, no_titlebar=True, grab_anywhere=True,
                          padding_x=5, padding_y=10,
                          element_justification='c', finalize=True)
     threading.Thread(
