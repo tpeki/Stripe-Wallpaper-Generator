@@ -61,6 +61,8 @@ def generate(p: Param):
     # まず セル単位のグリッド を作ります
     cell_w = cell_count * cell_width
     cell_h = int(cell_width * aspect / 100)
+    if cell_h < 1:
+        cell_h=1
 
     period = 3 * cell_count
     cols = (image_width + period * cell_width) // cell_w + cell_count
