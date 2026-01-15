@@ -49,7 +49,9 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 -コマンド一覧は mod_turtle の中にコメントで入れてあります。
 
 ## モジュール
+- bias: 斜め帯
 - chevron: ギザギザボーダー
+- gangi: 階段
 - hexmap: グラデ六角タイル
 - hexmaze: 森の六角迷路
 - hilbert: ヒルベルト曲線
@@ -68,3 +70,8 @@ KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。こ�
 
 
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 16decd6f0d18d7f966e7e5abd52d214ee3394d6a
