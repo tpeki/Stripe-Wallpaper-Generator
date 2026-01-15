@@ -6,8 +6,8 @@ import numpy as np
 import os.path as pa
 import colorsys
 
-def clip8(x: int):
-    '''clip8(x) -> {x | 0 <= x <= 255}に制限する'''
+def clip8(x):
+    '''clip8(x) -> {x | 0 <= x <= 255}の整数に制限する'''
     return min(255, max(int(x), 0))
 
 
@@ -140,6 +140,14 @@ def rgb_random_jitter(color: RGBColor, jitter):
     '''(R,G,B)に対してそれぞれ±jitterの幅でランダムに変化'''
     rgb = color.ctoi()
     rgb = tuple(clip8((c + random.randint(-jitter, jitter))) for c in rgb)
+    return RGBColor(rgb)
+
+
+def rated_jitter(color: RGBColor, jitter_r):
+    '''jitter_rで元の色に対して何%の変動かを与える'''
+    j = min(1.0, max(jitter_r/100.0, 0.0))
+    rgb = color.ctoi()
+    rgb = tuple(clip8(c*(1+random.uniform(-j, j))) for c in rgb)
     return RGBColor(rgb)
 
 

@@ -56,6 +56,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 - packingbubble: グラデーション円
 - peano: ペアノ曲線
 - penrose: ペンローズタイル
+- scallop: ホタテ貝
 - stripe: 縦ストライプ・モダン
 - turtle: タートルコマンド描画
 - waves: 青海波
@@ -64,7 +65,6 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 作成にあたり、Google Geminiに生成部分のコーディングなど大幅に支援いただきました。
 Microsoftさん、Windowsスポットライトのあまりの鬱陶しさにこんなツールを作るモチベーションが湧きました。
 KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。これがなければGUI化は考えませんでした。
-
 
 
 
