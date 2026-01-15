@@ -69,9 +69,4 @@ Microsoftさん、Windowsスポットライトのあまりの鬱陶しさにこ�
 KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。これがなければGUI化は考えませんでした。
 
 
-
-<<<<<<< HEAD
-=======
-
-
->>>>>>> 16decd6f0d18d7f966e7e5abd52d214ee3394d6a
+>>>>>>
