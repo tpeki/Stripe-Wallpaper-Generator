@@ -366,7 +366,11 @@ def gui_main(modlist: Modules, m, param: Param):
         elif ev == '-img-' and va['event_type'] == 'mousedown':
             # print('-img-', ev, va)
             if hasattr(m[modname], 'desc'):
-                m[modname].desc(param)
+                retv = m[modname].desc(param)
+                if isinstance(retv, Image.Image):
+                    image = retv
+                    wn['-img-'].update(data=image)
+                # 返り値がimg型なら、imgを更新するというのはどうか
         elif isinstance(ev, str):
             widg = ev[1:-2]
             # print( widg )

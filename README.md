@@ -51,6 +51,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 ## モジュール
 - bias: 斜め帯
 - chevron: ギザギザボーダー
+- emoji: 絵文字(0:敷石 1:螺旋) 
 - gangi: 階段
 - hexmap: グラデ六角タイル
 - hexmaze: 森の六角迷路

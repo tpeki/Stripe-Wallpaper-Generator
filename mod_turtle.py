@@ -64,6 +64,8 @@ def desc(p: Param):
             break
     sdialog.close()
 
+    return None
+
 
 '''
 TURTLEコマンド
