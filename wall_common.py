@@ -1,6 +1,6 @@
 '''wallpaper generator 共通クラス＆関数'''
 from dataclasses import dataclass
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 import random
 import numpy as np
 import os.path as pa
@@ -174,6 +174,11 @@ def brightness(color: RGBColor, f=1.0, h=0.0, s=1.0, bg=None):
                     round(g_new * 255),
                     round(b_new * 255))
 
+
+def sat_attenate(image, ratio):
+    '''彩度の変更： 0 < ratio(%) < 100 '''
+    enhancer = ImageEnhance.Color(image)
+    return enhancer.enhance(min(1.0, max(0.0, ratio/100.0)))
 
 def rgb_lerp(c1, c2, t):
     ''' RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)'''

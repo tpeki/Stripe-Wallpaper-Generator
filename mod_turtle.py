@@ -2,6 +2,7 @@ from PIL import Image, ImageDraw, ImageFont
 import random
 import TkEasyGUI as sg
 from wall_common import *
+from filedialog import *
 
 # --- 定数設定 ---
 PEN_COLOR = (0x40, 0xff, 0xff)  # ペン色
@@ -9,10 +10,24 @@ BG_COLOR = (0x88, 0x88, 0x88)  # 背景色
 PEN_WIDTH = 40  # ペン幅
 PEN_STEP = 10
 BACK_JITTER = 50  # 背景色の最大変化幅
-INTRCTV = 1
+CMDFONTS = 'BIZ UDゴシック'
+
+DEBUG_PR = [
+#    'x',
+#    'y',
+#    'dir',
+#    'pen',
+#    'color',
+#    'width',
+#    'step',
+    'sp',
+    'stack',
+    'lsp',
+    'lstack'
+    ]
 
 #CMD = '200,100J2R10FR5F255,255,0C200,400J2H10FR5F'
-CMD = '65z130,210jfrfr2frfr2frfr2flflf2l4f'\
+CMD = '65z130,210j3{frfr2}flflf2l4f'\
       'ulfrfd2l4frfr2frfr4frfr2frf'\
       'u2h6fn3fdfrfr2frfr2frfr2flflf2l4f'\
       'u2h2fn3fdrfr2frfr2frfr2frfr4frfr2frf'\
@@ -28,8 +43,7 @@ def intro(modlist: Modules, module_name):
     modlist.add_module(module_name, '年賀(似非タートル)',
                        {'color1':'ペン色','color2':'背景基本色',
                         'color_jitter':'背景色変化',
-                        'pwidth':'ペン幅', 'pheight':'ステップ幅',
-                        'pdepth':'対話型=0'})
+                        'pwidth':'ペン幅', 'pheight':'ステップ幅'})
     return module_name
 
 
@@ -40,12 +54,12 @@ def default_param(p: Param):
     p.color_jitter = BACK_JITTER
     p.pwidth = PEN_WIDTH
     p.pheight = PEN_STEP
-    p.pdepth = INTRCTV
+    tur_preserve['cmd'] = CMD
 
     return p
 
 
-def desc(p: Param):
+def view_desc(p: Param):
     posx = p.wwidth
     posy = p.wheight + p.wposy
 
@@ -66,34 +80,140 @@ def desc(p: Param):
 
     return None
 
+def edit_layout():
+    test_pane = [sg.Image(key='-t_test-', size=(640,360),
+                          background_color='#444444')
+                 ]
+    command_pane = [sg.Multiline(key='-t_cmds-', size=(80,10),
+                                 text_color='black', background_color='#f0eea0',
+                                 text_align='left', font=(CMDFONTS,12),
+                                 expand_x=True, expand_y=True)
+                    ]
+    buttons = [sg.Text('File'),
+               sg.Input('', text_align='right', key='-t_file-',expand_x=True),
+               sg.Text('', size=(2,1)),
+               sg.Button('Clear', key='-t_clr-'),
+               sg.Button('Test', key='-t_tst-'),
+               sg.Text(' ', size=(2,1)),
+               sg.Button('Load', key='-t_ld-'),
+               sg.Button('Save', key='-t_sv-'),
+               sg.Text(' ', size=(2,1)),
+               sg.Button('Cancel', key='-t_can-'),
+               sg.Button('Apply', key='-t_ok-'),
+               ]
+
+    return [test_pane, command_pane, buttons]
+
+
+def desc(p: Param):
+    layout = edit_layout()
+
+    wn = sg.Window('Turtle Draw', layout=layout, grab_anywhere=True,
+                   resizable=True)
+    
+    cmds = tur_preserve['cmd']
+    wn['-t_cmds-'].update(text=cmds)
+    
+    t_img = generate(p, command = cmds)
+    wn['-t_test-'].update(data=t_img)
+
+    while True:
+        ev, va = wn.read()
+        if ev == sg.WINDOW_CLOSED or ev == '-t_can-':
+            t_img = None
+            break
+        elif ev == '-t_clr-':
+            cmds = f'{p.width//2},{p.height//2}jh'  # 初期コマンド
+            wn['-t_cmds-'].update(text=cmds)
+            t_img = Image.new('RGB', (p.width, p.height), color='#444444')
+            wn['-t_test-'].update(data=t_img)
+        elif ev == '-t_tst-':
+            cmds = wn['-t_cmds-'].get_text()
+            if '\n' in cmds:
+                cmds = ''.join(cmds.splitlines())
+            # print(f'CMDS: {cmds}')
+            t_img = generate(p, command=cmds)
+            wn['-t_test-'].update(data=t_img)
+        elif ev == '-t_ok-':
+            cmds = wn['-t_cmds-'].get_text()
+            if '\n' in cmds:
+                cmds = ''.join(cmds.splitlines())
+            t_img = generate(p, command=cmds)
+            wn['-t_test-'].update(data=t_img)
+            tur_preserve['cmd'] = cmds
+            break
+        elif ev == '-t_ld-':
+            fname = wn['-t_file-'].get_text()
+            cmds, fname = load_tur(fname)
+            print(f'FILE: {fname} / CMDS: {cmds}')
+            if fname == '':  # =cancelled
+                continue
+            wn['-t_cmds-'].update(text=cmds)
+            wn['-t_file-'].update(text=fname)
+            t_img = generate(p, command=cmds)
+            wn['-t_test-'].update(data=t_img)
+        elif ev == '-t_sv-':
+            fname = wn['-t_file-'].get_text()
+            cmds = wn['-t_cmds-'].get_text()
+            fname = save_tur(fname, cmds)
+            if fname == '':  # =cancelled
+                continue
+            wn['-t_file-'].update(text=fname)
+        
+    wn.close()
+    return t_img
+
+def load_tur(fname):
+    fname = get_openfile(fname, filetypes=[('Turtle command','.tur'),] )
+    print(f'File {fname}')
+    if fname == '':
+        return '', ''
+    cmds = ''  # 仮 cmdsに\n入っててもよい
+    with open(fname, mode='r', encoding='shift-jis') as f:
+        print(f'read {fname}')
+        cmds = f.read()
+    return cmds, fname
+
+def save_tur(fname, cmds):
+    fname = get_savefile(fname, filetypes=[('Turtle command','.tur'),] )
+    if fname == '':
+        return ''
+    with open(fname, mode='w', encoding='shift-jis') as f:
+        f.write(cmds)
+    return fname
 
 '''
 TURTLEコマンド
-n     F    スタック先頭の数値だけn歩前進 スタックに値が無ければ1歩
-n     L/R  スタック先頭の数値だけCCW/CWに回頭 ただし1単位=45度、
-           スタックに値が無ければ1とみなす
--     U/D  ペンアップ／ダウン
-r,g,b C    スタック先頭3値でペン色を変更
-n     P    スタック先頭の値でペン太さ(ピクセル)を変更
-x,y   J    スタック先頭2値で絶対座標に移動
--     N    タートルの方向を北(方向0)に変更(初期値)
-n     H    タートルの方向をスタック先頭の値にする(0..7)
-n     ]    スタック先頭の値をコピーして積む
--     [    スタック先頭の値を捨てる
--     X    スタック先頭の2値を入れ替える
-n     ,    nをスタック先頭に積む(数値の後に文字が来たらスタックに積むので実は何もしない)
--     W    現在の座標をスタック先頭にX,Yで積む
-n     Z    セルサイズをn×nピクセルにする
-n     S    スタック先頭をレジスタ番号とし、次値を#nに(値はスタックに残る)
-n     Q    レジスタ#nの値をスタックにPUSH
-x,y   +/-/*///^ 四則演算・べき乗
-x     ~    符号反転
--     ".." クォート間の文字をカーソル位置に挿入
+F    スタック先頭をpopし、数値だけn歩前進 スタックに値が無ければ1歩
+L/R  スタック先頭をpopし、その回数CCW/CWに回頭 ただし1単位=45度、スタックに値が無ければ1とみなす
+U/D  ペンアップ／ダウン
+C    スタック先頭からb,g,rをpopしてペン色を(r,g,b)に変更
+P    スタック先頭をpopし、ペン太さ(ピクセル)を変更
+J    スタック先頭からx,yをpopし、絶対座標(x,y)に移動
+N    タートルの方向を北(方向0)に変更(初期値)
+H    スタック先頭をpopし、タートルの方向をその向きにする(0..7)
+]    スタック先頭の値を複製してスタックに積む
+[    スタック先頭の値を捨てる
+X    スタック先頭の2値を入れ替える
+,    直前の数値をスタック先頭に積む(数値の後に文字が来たらスタックに積むので実は何もしない)
+W    現在の座標をスタック先頭にx,yの順で積む
+Z    スタック先頭をpopし、移動単位をnピクセルにする
+S    スタック先頭をレジスタ番号とし、次値をレジスタ#nにコピー(値はスタックに残る)
+Q    レジスタ#nの値をスタックに積む
+?    スタック先頭の値を数値として描画する(popしない)
++/-/*///^ スタック先頭の2値を用いて四則演算・べき乗
+~    スタック先頭をpopし、符号反転して積む
+".." クォート間の文字をカーソル位置に挿入
+{    スタック先頭をpopし、繰り返し数として対応する}まで繰り返し(ネスト可)
+}    ループ終端
+!    スタック先頭をpopし、0なら一番浅いループを抜ける
+&    デバッグ出力をコンソールに行う
 '''
 
 DIR = [(0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1)]
 REGISTER_SIZE = 10
 STACK_SIZE = 32
+LSTACK_SIZE = 32
 MAX_PEN_WIDTH = 200
 Opcode = ['+', '-', '*', '/', '^']  # 二項演算子
 Unary = ['~']  # 単項演算子
@@ -114,6 +234,8 @@ class Turtle:
         self.register = [0]*REGISTER_SIZE
         self.stack = [0] * STACK_SIZE
         self.sp = -1
+        self.lstack = [0] * LSTACK_SIZE
+        self.lsp = -1
 
     def pop_stack(self, default=0):
         if self.sp < 0:
@@ -127,20 +249,49 @@ class Turtle:
             self.sp += 1
             self.stack[self.sp] = n
 
+    def pop_lstack(self):
+        if self.lsp < 0:
+            return (0,None,None)
+        val = self.lstack[self.lsp]
+        self.lsp -= 1
+        return val  # (count, start, end)
+
+    def read_lstack(self):
+        if self.lsp < 0:
+            return (0,None,None)
+        val = self.lstack[self.lsp]
+        return val  # (count, start, end)
+
+    def push_lstack(self, count, start, end):
+        if self.lsp < LSTACK_SIZE - 1:
+            self.lsp += 1
+            self.lstack[self.lsp] = (count, start, end)
+
     def show_stack(self, n):
         val = {}
-        val['sp'] = self.sp
-        s = []
-        if n > STACK_SIZE:
-            n = STACK_SIZE
-        for i in range(STACK_SIZE):
-            s.append(self.stack[i])
-
-        val['stack'] = s
         val['x'] = self.x
         val['y'] = self.y
         val['dir'] = self.dir
-        val['pen'] = self.color.ctox() + f' Size={self.width}'
+        val['pen'] = self.pen
+        val['color'] = self.color.ctox()
+        val['width'] = self.width
+        val['step'] =  self.step
+        val['register'] = self.register
+        val['sp'] = self.sp
+        s = []
+        num = min(STACK_SIZE, max(n, 0))
+        for i in range(num):
+            if (self.sp-i) >= 0:
+                s.append(self.stack[self.sp - i])
+
+        val['stack'] = s
+        val['lsp'] = self.lsp
+        l = []
+        num = min(LSTACK_SIZE, max(n, 0))
+        for i in range(num):
+            if (self.lsp-i) >= 0:
+                l.append(self.lstack[self.lsp-i])
+        val['lstack'] = l
         
         return val
             
@@ -243,8 +394,8 @@ class Turtle:
         # print(f'Turtle.Retore[{n}]: push {self.register[n]}')
 
     def calc(self, opcode):
-        x = self.pop_stack()
         y = self.pop_stack()
+        x = self.pop_stack()
         if opcode == '+':
             self.push_stack(x+y)
         elif opcode == '-':
@@ -277,7 +428,74 @@ class Turtle:
         self.x = int(bbox[2])
         self.y = self.y  # 高さは変えない
         # print(f'Turtle.put_text: {s}, bbox=({bbox})')
+
+    def loop_start(self, script, pos):
+        loop_counter = self.pop_stack()
+        loop_start = pos+1
+        lc = 0
+        cptr = pos+1
+        while cptr < len(script):
+            if script[cptr] == '{':
+                lc += 1
+                # print('Found InnerLoop')
+            elif script[cptr] == '}':
+                lc -= 1
+                if lc < 0:
+                    loop_end = cptr
+                    # print('Found LoopEND')
+                    break
+                else:
+                    # print('Found InnerLoopEND')
+                    pass
+            cptr += 1
+        if lc >= 0:
+            loop_end = len(script) - 1
+
+        self.push_lstack(loop_counter, loop_start, loop_end)
+        # print(f'LoopStart {self.show_stack(3)}')
+
+    def loop_end(self, pos):
+        c,s,e = self.pop_lstack()
+        # print(f'LoopEnd1 {self.show_stack(3)}')
+        if e is None:
+            print(f'Turtle.loop: Illegal loop end')
+            return pos+1
+            
+        if e == pos:
+            c -= 1
+            if c <= 0:
+                return pos + 1
+            else:
+                # print(f'LoopEnd2 {self.show_stack(3)}')
+                self.push_lstack(c, s, e)
+                return s
+        print(f'Turtle.loop: Illegal loop clause @ {pos}; {s}-{e}, count={c}')
+        return pos+1
+
+    def brk(self, pos):
+        f = self.pop_stack()
+        c,s,e = self.read_lstack()
+        if e is None:
+            print(f'Turtle.loop: Illegal break code')
+            return pos+1
+        if f != 0: # 0以外なら続行
+            return pos+1
+        else:
+            c,s,e = self.pop_lstack()
+            return e+1
+
+    def print_stacktop(self, draw):
+        t = self.pop_stack()
+        self.push_stack(t)
+        self.put_text(draw, str(t))
         
+    def trace(self):
+        val = self.show_stack(3)
+        buf = ''
+
+        for x in DEBUG_PR:
+            buf += x+': '+str(val[x])+'  '
+        print(f'Dump: {buf}')
 
 
 # コマンドディスパッチテーブル
@@ -297,12 +515,15 @@ Commands = {
     'X': Turtle.exchange,
     'Z': Turtle.zoom,
     'S': Turtle.store,
-    'Q': Turtle.restore
+    'Q': Turtle.restore,
+    '&': Turtle.trace
     }
 
 
 def turtle_draw(draw, turtle, cmds, verbose=False):
     '''turtle_draw(draw: ImageDraw, turtle: Turtle, cmds: str)'''
+    if isinstance(cmds, list):
+        cmds = ''.join(cmds)
     if verbose:
         print(f'Command = {cmds}')
     ptr = 0
@@ -333,6 +554,11 @@ def turtle_draw(draw, turtle, cmds, verbose=False):
                 print( f'{ptr}: Command "F"', turtle.show_stack(3))
             turtle.forward(draw)
             ptr += 1
+        elif cmds[cur] == '?':
+            if verbose:
+                print( f'{ptr}: Command "?"', turtle.show_stack(3))
+            turtle.print_stacktop(draw)
+            ptr += 1
         elif cmds[cur] in Opcode:  # 二項演算子
             if verbose:
                 print( f'{ptr}: Calc "{cmds[cur]}"', turtle.show_stack(3))
@@ -343,6 +569,19 @@ def turtle_draw(draw, turtle, cmds, verbose=False):
                 print( f'{ptr}: Unary "{cmds[cur]}"', turtle.show_stack(3))
             turtle.unary(cmds[cur])
             ptr += 1
+        elif cmds[cur] == '{':
+            if verbose:
+                print( f'{ptr}: loopstart "{cmds[cur]}"', turtle.show_stack(3))
+            turtle.loop_start(cmds, cur)
+            ptr += 1
+        elif cmds[cur] == '}':
+            if verbose:
+                print( f'{ptr}: loopend "{cmds[cur]}"', turtle.show_stack(3))
+            ptr = turtle.loop_end(cur)
+        elif cmds[cur] == '!':
+            if verbose:
+                print( f'{ptr}: break "{cmds[cur]}"', turtle.show_stack(3))
+            ptr = turtle.brk(cur)
         else:  # その他のコマンドはディスパッチテーブルで
             if verbose:
                 print( f'{ptr}: Command "{cmds[cur]}"', turtle.show_stack(3))
@@ -355,30 +594,7 @@ def turtle_draw(draw, turtle, cmds, verbose=False):
     # interpreter end
 
 
-def edit_layout():
-    test_pane = [sg.Image(key='-t_test-', size=(640,360),
-                          background_color='gray')
-                 ]
-    command_pane = [sg.Multiline(key='-t_cmds-', enable_events=True,
-                                 enable_key_events=True, size=(80,10),
-                                 text_color='black', background_color='white',
-                                 text_align='left',
-                                 expand_x=True, expand_y=True)
-                    ]
-    buttons = [[sg.Text('Pattern No.'),
-                sg.Input('1', text_align='right', size=(2,1), key='-t_no-'),
-                sg.Text('', expand_x=True),
-                sg.Button('Clear', key='-t_clr-'),
-                sg.Button('Load', key='-t_ld-'),
-                sg.Button('Test', key='-t_tst-'),
-                sg.Text(' ', expand_x=True),
-                sg.Button('Save', key='-t_sv-')]]
-    layout = [test_pane, comand_pane, buttons]                
-
-    return layout
-
-
-def generate(p: Param):
+def generate(p: Param, command=''):
     """
     指定されたパラメータに基づいて、turtleで画像生成する
     """
@@ -392,16 +608,17 @@ def generate(p: Param):
     start_x = p.width // 2
     start_y = p.height // 2
     intrctv = p.pdepth == 0
+    if command == '':
+        # print('command = Null str')
+        cmd = tur_preserve['cmd']
+    else:
+        # print(f'given command: {command}')
+        cmd = command
+    if isinstance(cmd, list):
+        cmd = ''.join(cmd)
     
     turtle = Turtle(size=pen_size, step=pen_step, color=pen_color,
                     x=start_x, y=start_y)
-
-    if intrctv:
-        print('Coming soon.')
-        # cmd = interactive_dialog(p)
-        cmd = CMD
-    else:
-        cmd = CMD
 
     # 描画イメージの生成・背景作成
     bg_start = rgb_random_jitter(bg_color, jitter)
@@ -410,7 +627,7 @@ def generate(p: Param):
     draw = ImageDraw.Draw(image)
         
     turtle_draw(draw, turtle, cmd, verbose=False)
-    tur_preserve['cmd'] = cmd
+    # print(cmd)
 
     return image
     
@@ -427,6 +644,3 @@ if __name__ == '__main__':
     image = generate(p)
     image.show()
 
-# TODO
-#  Gemini先生も言っていたが、繰り返し処理区間の定義"{","}"と、
-# 条件判断break"!"を追加したい。

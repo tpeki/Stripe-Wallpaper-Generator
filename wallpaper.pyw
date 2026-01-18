@@ -20,10 +20,9 @@ from PIL import Image, ImageDraw
 import random
 from wall_common import *
 import TkEasyGUI as sg
-import tkinter as tk
-from tkinter import filedialog
 import threading
 import queue
+from filedialog import *
 
 DEFAULT_MODULE = 'stripe'
 IMAGE_WIDTH = 1920
@@ -250,20 +249,6 @@ def set_param(window, param, mod_gui):
     window.refresh()
 
 
-def get_savefile(fname):
-    root = tk.Tk()
-    root.withdraw()
-
-    filename = filedialog.asksaveasfilename(
-        title='Save File',
-        initialdir='.',
-        initialfile=fname,
-        filetypes=[("PNG files", "*.png")]
-    )
-
-    return filename
-
-
 def set_window_geom(param:Param, window: sg.Window):
     param.wwidth, param.wheight = window.get_location()
     param.wposx, param.wposy = window.get_size()
@@ -319,7 +304,6 @@ def gui_main(modlist: Modules, m, param: Param):
     print('-- main loop --')
     while True:
         ev, va = wn.read()
-        set_window_geom(param, wn)
         # print(ev, isinstance(ev, str), va)
 
         if ev == sg.WINDOW_CLOSED or ev == 'Exit' or ev == '-done-':
@@ -328,6 +312,8 @@ def gui_main(modlist: Modules, m, param: Param):
             base=param.pattern
             fname = param.file_name()
             fname = get_savefile(fname)
+            if fname == '':
+                continue
             image.save(fname)
             param.savefile = fname
             wn['-fname-'].update(pa.basename(param.savefile))
@@ -365,6 +351,8 @@ def gui_main(modlist: Modules, m, param: Param):
             continue            
         elif ev == '-img-' and va['event_type'] == 'mousedown':
             # print('-img-', ev, va)
+            set_window_geom(param, wn)
+            print(param.wwidth, param.wheight, param.wposx, param.wposy)
             if hasattr(m[modname], 'desc'):
                 retv = m[modname].desc(param)
                 if isinstance(retv, Image.Image):

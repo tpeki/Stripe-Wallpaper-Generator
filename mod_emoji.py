@@ -27,6 +27,7 @@ emoji_preserv = {
 # ----
 BASE_COLOR = (30,120,30)
 END_COLOR = 40
+SATULATION = 80
 CHAR_NUM = 8
 FORM = 0
 
@@ -38,6 +39,7 @@ def intro(modlist: Modules, module_name):
     modlist.add_module(module_name, '絵文字 4文字時検討中',
                        {'color1':'基本色',
                         'color_jitter':'背景色幅',
+                        'sub_jitter':'彩度(%)',
                         'pwidth':'文字数(横)',
                         'pheight':'形状(0/1)'})
     return module_name
@@ -47,6 +49,7 @@ def intro(modlist: Modules, module_name):
 def default_param(p: Param):
     p.color1.itoc(*BASE_COLOR)
     p.color_jitter = END_COLOR
+    p.sub_jitter = SATULATION
     p.pwidth = CHAR_NUM
     p.pheight = FORM
     return p
@@ -347,6 +350,7 @@ def generate(p: Param):
     height = p.height
     base_color = p.color1
     jitter = p.color_jitter
+    satulation = np.clip(p.sub_jitter, 0, 100)
     char_num = p.pwidth
     form = p.pheight
 
@@ -363,7 +367,7 @@ def generate(p: Param):
     else:
         pave(draw, width, height, font_name, char_num)
 
-    return image
+    return sat_attenate(image, satulation)
 
 
 if __name__ == '__main__':
