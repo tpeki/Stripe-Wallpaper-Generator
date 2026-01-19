@@ -16,10 +16,15 @@ emoji_preserv = {
               '\U0001F3D5',  # テント
               '\U0001F638',  # 犬
               None],
+    'winding': 0.2,  # 巻きの強さ(char_numを増やした方が目立つが)
+    'sp_lines': 24,  # 腕の数
+    'sp_dense': 1.4,  # 腕に含まれる文字数の倍率 （×pwidth文字）
+    'base_size': 12,  # 渦最小文字サイズ / 敷石サイズ係数(base/12)
+    'large_size': 96,  # 渦最大文字サイズ
     'font': 'c:\\Windows\\Fonts\\seguiemj.ttf',
-    'font-from': 0x1f000,
-    'font-to': 0x1f700,
-    'font-start': 0x1f300
+    'font-from': 0x1f000,  # 絵文字範囲先頭
+    'font-to': 0x1f700,  # 絵文字範囲末尾
+    'font-start': 0x1f300  # 最初に表示するページ
     }
 
 # ----
@@ -28,7 +33,7 @@ emoji_preserv = {
 BASE_COLOR = (30,120,30)
 END_COLOR = 40
 SATULATION = 80
-CHAR_NUM = 8
+CHAR_NUM = 12
 FORM = 0
 
 # 補助定数
@@ -93,6 +98,21 @@ def desc(p: Param):
                        key='-ch3_img-', enable_events=True),
               sg.Text(codestr(codes[3]), key='-ch3_id-', expand_x=True)],
              [sg.Text('')],
+             [sg.Text('基本文字サイズ(12)'),
+              sg.Input(str(emoji_preserv['base_size']), key='-base_size-',
+                       size=(4,1), expand_x=True), sg.Text('×', size=(1,1)),
+              sg.Text('外周サイズ(96)'),
+              sg.Input(str(emoji_preserv['large_size']), key='-large_size-',
+                       size=(4,1),expand_x=True), sg.Text('', size=(1,1))],
+             [sg.Text('渦文字密度(1.4)'),
+              sg.Input(str(emoji_preserv['sp_dense']), key='-sp_dense-',
+                       size=(4,1),expand_x=True), sg.Text('', size=(1,1))],
+             [sg.Text('巻き強度(0.2)'),
+              sg.Input(str(emoji_preserv['winding']), key='-winding-',
+                       size=(4,1), expand_x=True), sg.Text('', size=(1,1)),
+              sg.Text('巻き数(24)'),
+              sg.Input(str(emoji_preserv['sp_lines']), key='-sp_lines-',
+                       size=(4,1), expand_x=True), sg.Text('', size=(1,1))],
              [sg.Button('\U000023EA', key='-prev-', background_color='#ffffdd'),
              sg.Text('', expand_x=True),
              sg.Text('', key='-page-'), sg.Text('', expand_x=True),
@@ -198,7 +218,18 @@ def desc(p: Param):
                     emoji_preserv['chars'][i] = chr(lst[i])
                     # print(i, emoji_preserv['chars'])
                 break
-             
+            
+    for x in ('winding', 'base_size', 'large_size', 'sp_dense', 'sp_lines'):
+        val = wn[f'-{x}-'].get_text()
+        try:
+            vv = float(val)
+        except ValueError:
+            vv = 0.0
+        if x == 'sp_lines':
+            vv = clip8(int(vv))
+        emoji_preserv[x] = vv
+        # print(f'{x}: {val} -> {vv}')
+    
     wn.close()
 
     image = generate(p)
@@ -281,14 +312,16 @@ def get_font(font_path, size):
 # 画像生成
 # ----
 def spiral(draw, width, height, font_name, char_num):
-    char_num = int(char_num * 1.4)
+    char_num = int(char_num * emoji_preserv['sp_dense'])
     
     cx, cy = width//2, height//2
-    lines = 24
+    lines = int(emoji_preserv['sp_lines'])
 
     r_max = max(width, height) * 0.5
     r_min = 40
-    k = math.pi * 0.2
+    k = math.pi * emoji_preserv['winding']
+    maxf = int(emoji_preserv['large_size'])
+    minf = int(emoji_preserv['base_size'])
 
     text = ''.join(filter(None,emoji_preserv['chars']))
 
@@ -301,7 +334,7 @@ def spiral(draw, width, height, font_name, char_num):
             r = r_max * (1 - t2) + r_min * t2
             theta = theta0 + k*math.log(r_max/r)
             
-            size = int(96 * (1 - t) + 12 * t)
+            size = int(maxf * (1.0 - math.sqrt(t)) + minf * math.sqrt(t))
             font =  get_font(font_name, size)
 
             x = cx + r * math.cos(theta)
@@ -320,7 +353,8 @@ def pave(draw, width, height, font_name, char_num):
     y_pitch = Y_PITCH
 
     # 画像サイズと1段に描画する文字数からフォントサイズを決定
-    font_size = width//(char_num*x_pitch)
+    space = int(width/(char_num*x_pitch))
+    font_size = int(width/(char_num*x_pitch) * emoji_preserv['base_size']/12)
     font = get_font(font_name, font_size)
 
     # 設定個数に応じた表示絵文字配列を生成
@@ -335,12 +369,12 @@ def pave(draw, width, height, font_name, char_num):
 
     # 絵文字を配置
     for y in range(int(height/(font_size*y_pitch))+2):
-        offset = y%2*(x_pitch/2)*font_size
+        offset = y%2*(x_pitch/2)*space #font_size
         for x in range(char_num+1):
             c = disp_chars[(x+y%4//2)%2 + (y%2)*2]
 
             # embedded_color=True がカラー表示のポイント
-            draw.text((x*font_size*x_pitch+offset, y*font_size*y_pitch),
+            draw.text((x*space*x_pitch+offset, y*font_size*y_pitch),
                       c, font=font, embedded_color=True)
     return
 

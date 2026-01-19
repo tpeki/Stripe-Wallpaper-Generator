@@ -160,7 +160,7 @@ def layout(modlist):
                sg.Text('', key='-moddesc-', expand_x=True)],
               [sg.Text('',expand_x=True),
                sg.Image(key='-img-', background_color="#7f7f7f",
-                    size=(480,270), enable_events=True),
+                        size=(640,360), enable_events=True),
                sg.Text('',expand_x=True)],
               [sg.Column(layout=color_column_layout),
                sg.Column(layout=jitter_column_layout),
@@ -352,7 +352,7 @@ def gui_main(modlist: Modules, m, param: Param):
         elif ev == '-img-' and va['event_type'] == 'mousedown':
             # print('-img-', ev, va)
             set_window_geom(param, wn)
-            print(param.wwidth, param.wheight, param.wposx, param.wposy)
+            # print(param.wwidth, param.wheight, param.wposx, param.wposy)
             if hasattr(m[modname], 'desc'):
                 retv = m[modname].desc(param)
                 if isinstance(retv, Image.Image):
