@@ -1,8 +1,9 @@
 '''wallpaper generator 共通クラス＆関数'''
 from dataclasses import dataclass
-from PIL import Image, ImageDraw, ImageEnhance
 import random
+import re
 import numpy as np
+from PIL import Image, ImageDraw, ImageEnhance
 import os.path as pa
 import colorsys
 
@@ -293,3 +294,14 @@ def to_rgb(value):
             raise ValueError('Hexadecimal is not correct')
     raise ValueError('Invalid format')
             
+
+def get_pos(event_str: str):
+    '''Mouse Event文字列から座標を取り出す'''
+    # print(event_str)   
+    x_match = re.search(r"x=(\d+)", event_str)
+    y_match = re.search(r"y=(\d+)", event_str)
+
+    mouse_x = int(x_match.group(1)) if x_match else -1
+    mouse_y = int(y_match.group(1)) if y_match else -1
+
+    return (mouse_x, mouse_y)

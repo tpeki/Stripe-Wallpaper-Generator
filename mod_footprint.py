@@ -1,6 +1,5 @@
 import numpy as np
 from PIL import Image, ImageColor
-import random
 from wall_common import *
 
 '''

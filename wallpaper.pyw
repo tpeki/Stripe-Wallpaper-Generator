@@ -12,16 +12,17 @@ v2.0.3 2026/01/05 Save asダイアログを表示するようにした。
 '''
 
 import importlib.util as impl
+from io import StringIO
 import sys
 import os.path as pa
 import argparse
 import glob
-from PIL import Image, ImageDraw
 import random
-from wall_common import *
+from PIL import Image, ImageDraw, ImageFont
 import TkEasyGUI as sg
 import threading
 import queue
+from wall_common import *
 from filedialog import *
 
 DEFAULT_MODULE = 'stripe'
@@ -29,6 +30,9 @@ IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1080
 SAVE_NUM = 3
 
+# ----
+# プラグインモジュール検索
+# ----
 def search_modules(modlist: Modules, plugin_dir):
     modules = {}
 
@@ -80,6 +84,15 @@ def search_modules(modlist: Modules, plugin_dir):
 #                          color=(base_r, base_g, base_b))
 #        return image
 #
+#    def desc(p: Param):
+#       return image | None
+#
+#       descの実装はoptionalであり、無くてもよい。
+#       サンプル画像をクリックした際に詳細情報/追加パラメータ設定
+#       を提供することができる
+#       設定変更の結果壁紙生成結果が変更される場合、imageを返すと
+#       メイン画面のサンプル画像を更新する
+#
 # モジュールの呼び出し方
 # (1) モジュールを検索登録する
 # modlist = Modules()
@@ -93,6 +106,9 @@ def search_modules(modlist: Modules, plugin_dir):
 # image = m[module-name].generate(p)  : 画像を生成
 
 
+# ----
+# メインGUI
+# ----
 def layout(modlist):
     menudef = [['File', ['Save', 'Exit']],
                 ['Module', modlist.modules],
@@ -244,45 +260,31 @@ def set_param(window, param, mod_gui):
                     pass
         else:
             hide_param(window, elem)
-            
-    window['-fname-'].update(param.file_name())
+    if param.savefile is None or param.savefile == '':
+        param.file_name()
+    window['-fname-'].update(pa.basename(param.savefile))
     window.refresh()
 
 
 def set_window_geom(param:Param, window: sg.Window):
     param.wwidth, param.wheight = window.get_location()
     param.wposx, param.wposy = window.get_size()
-    
-
-result_q = queue.Queue()
-
-def long_task(param, modules, modname):
-    image = modules[modname].generate(param)
-    result_q.put(image)
-
-
-def get_image_thread(window, param, modules, modname):
-    progress = sg.Window('', [[sg.Text('Wait...', text_align='center',
-                                       size=(20,10), 
-                                       background_color='#f0e070')]],
-                         modal=True, no_titlebar=True, grab_anywhere=True,
-                         padding_x=5, padding_y=10,
-                         element_justification='c', finalize=True)
-    threading.Thread(
-        target=long_task,
-        args=(param,modules,modname),
-        daemon=True).start()
-    while True:
-        pev, pva = progress.read(timeout=50)
-        if pev is None:
-            image = None
-            break
-        elif  not result_q.empty():
-            image = result_q.get()
-            break
-    progress.close()
-    return image
-
+    for c in range(3):
+        s = window[f'-color{c+1}-1'].get()
+        if s is not None:
+            try:
+                color = RGBColor(tuple(int(x) for x in s.split(',')))
+                setattr(param, f'color{c+1}', color)
+            except ValueError:
+                pass
+    for x in PARAMVALS[3:]:
+        v = window[f'-{x}-1'].get()
+        if v is not None:
+            try:
+                setattr(param, x, int(v, 10))
+            except ValueError:
+                pass
+    return
 
 def gui_main(modlist: Modules, m, param: Param):
     '''gui_main(modlist:Modules, dict-module_funcs, p:Parameter)
@@ -358,7 +360,7 @@ def gui_main(modlist: Modules, m, param: Param):
                 if isinstance(retv, Image.Image):
                     image = retv
                     wn['-img-'].update(data=image)
-                # 返り値がimg型なら、imgを更新するというのはどうか
+                    set_param(wn, param, modlist.mod_gui[modname])
         elif isinstance(ev, str):
             widg = ev[1:-2]
             # print( widg )
@@ -379,11 +381,67 @@ def gui_main(modlist: Modules, m, param: Param):
     return
 
 
+# ----
+# イメージ取得を別スレッドで実施する
+# ----
+result_q = queue.Queue()
+
+def long_task(param, modules, modname):
+    image = modules[modname].generate(param)
+    result_q.put(image)
+
+
+def get_image_thread(window, param, modules, modname):
+    progress = sg.Window('', [[sg.Text('Wait...', text_align='center',
+                                       size=(20,10), 
+                                       background_color='#f0e070')]],
+                         modal=True, no_titlebar=True, grab_anywhere=True,
+                         padding_x=5, padding_y=10,
+                         element_justification='c', finalize=True)
+    threading.Thread(
+        target=long_task,
+        args=(param,modules,modname),
+        daemon=True).start()
+    while True:
+        pev, pva = progress.read(timeout=50)
+        if pev is None:
+            image = None
+            break
+        elif  not result_q.empty():
+            image = result_q.get()
+            break
+    progress.close()
+    return image
+
+
+# ----
+# CLI(非インタラクティブ)動作メイン
+# ----
+def batch_generate(m, pattern, args, param):
+    m[pattern].default_param(param)
+    for name in ['jitter1', 'jitter2', 'jitter3',
+                 'pwidth', 'pheight', 'pdepth']:
+        v = getattr(args, name, None)
+        if v is not None:
+            setattr(param, name, v)
+    for name in ['color1', 'color2', 'color3']:
+        v = getattr(args, name, None)
+        if v is not None:
+            setattr(param, name, RGBColor(v))  # strのままじゃ駄目
+
+    img = m[pattern].generate(param)
+    drw = ImageDraw.Draw(img)
+    font = ImageFont.truetype('arial.ttf', 10)
+    drw.text((param.width-len(pattern)*10,param.height-12),text=pattern,
+             fill='#ffffff', font=font)
+    return img
+
+
 def args_set(parser):
     parser.add_argument('--plugin_dir', help='プラグインフォルダ')
     parser.add_argument('--list_modules',action='store_true',
                        help='モジュールリスト表示')
-    parser.add_argument('--module', help='モジュールを起動')
+    parser.add_argument('--module', help='モジュールを起動 random可')
     parser.add_argument('--width', type=int, help='生成画像幅')
     parser.add_argument('--height', type=int, help='生成画像高')
     parser.add_argument('--color1', help='基本色指定')
@@ -402,6 +460,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='壁紙ジェネレータ')
     args_set(parser)
+    exe = pa.basename(sys.executable).lower()
+    if ('--help' in sys.argv or '-h' in sys.argv) and exe == 'pythonw.exe':
+        helptext = parser.format_help()
+        sg.popup(helptext, title='WallPaper Generator')
+        exit()
     args = parser.parse_args()    
     
     modlist = Modules()
@@ -414,39 +477,26 @@ if __name__ == '__main__':
     param.height = IMAGE_HEIGHT if args.height is None else args.height
 
     if args.list_modules:
-        print('Modules available:')
+        buf = StringIO()
+        print('Modules available:', file=buf)
         for x in modlist.modules:
-            print(f'{x}: {modlist.mod_desc[x]}')            
+            print(f'{x}: {modlist.mod_desc[x]}', file=buf)
+        if  exe == 'pythonw.exe':
+            sg.popup(message=buf.getvalue(), title='WallPaper Generator')
+        else:
+            print(buf.getvalue())
     elif args.module is None:
         gui_main(modlist, m, param)
     else:
-        m[args.module].default_param(param)
-        for name in ['jitter1', 'jitter2', 'jitter3',
-                     'pwidth', 'pheight', 'pdepth']:
-            v = getattr(args, name, None)
-            if v is not None:
-                setattr(param, name, v)
-        for name in ['color1', 'color2', 'color3']:
-            v = getattr(args, name, None)
-            if v is not None:
-                setattr(param, name, RGBColor(v))  # strのままじゃ駄目
-
-        img = m[args.module].generate(param)
-        print(f'Generated {args.module}')
-        if isinstance(args.files, list):
-            if len(args.files) == 0:
-                img.show()
-                exit()
-            else:
-                f = args.files[0]
-        else:
-            f = args.files 
-        if pa.splitext(f)[1] != '.png':
-            f = pa.splitext(f)[0]+'.png'
-        img.save(f)
-        print(f'Image saved in {f}')
-                
-                
+        pattern = args.module
+        if pattern.lower() == 'random':
+            pattern = modlist.modules[random.randint(0,len(modlist.modules)-1)]
         
-
-
+        img = batch_generate(m, pattern, args, param)
+        print(f'Generated {pattern}')
+        if len(args.files) > 0:
+            f = pa.splitext(args.files[0])[0]+'.png'
+            img.save(f)
+            print(f'Image saved in {f}')
+        else:
+            img.show()

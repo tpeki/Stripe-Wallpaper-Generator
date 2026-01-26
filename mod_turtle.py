@@ -92,14 +92,14 @@ def edit_layout():
     buttons = [sg.Text('File'),
                sg.Input('', text_align='right', key='-t_file-',expand_x=True),
                sg.Text('', size=(2,1)),
-               sg.Button('Clear', key='-t_clr-'),
+               sg.Button('Clear', key='-t_clr-', background_color='#ddddff'),
                sg.Button('Test', key='-t_tst-'),
                sg.Text(' ', size=(2,1)),
                sg.Button('Load', key='-t_ld-'),
                sg.Button('Save', key='-t_sv-'),
                sg.Text(' ', size=(2,1)),
-               sg.Button('Cancel', key='-t_can-'),
-               sg.Button('Apply', key='-t_ok-'),
+               sg.Button('Cancel', key='-t_can-', background_color='#ffdddd'),
+               sg.Button('Apply', key='-t_ok-', background_color='#ddffdd'),
                ]
 
     return [test_pane, command_pane, buttons]

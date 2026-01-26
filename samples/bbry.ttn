@@ -1,0 +1,20 @@
+[Colors]
+Color0=(20, 60, 40)
+Color1=(190, 20, 30)
+Color2=(239, 227, 215)
+Color3=(20, 10, 80)
+Color4=(5, 5, 5)
+Color5=(197, 170, 145)
+Color6=(130, 130, 130)
+Color7=(248, 248, 68)
+Color8=(248, 17, 248)
+Color9=(252, 230, 141)
+[Pattern]
+01:Color5 * 60
+02:Color1 * 10
+03:Color5 * 60
+04:Color4 * 20
+05:Color2 * 20
+06:Color4 * 20
+07:Color2 * 20
+08:Color4 * 20

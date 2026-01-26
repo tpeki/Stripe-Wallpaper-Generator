@@ -246,18 +246,6 @@ def codestr(x):
     return f'U+{x:X}'
 
 
-def get_pos(event_str: str):
-    '''Mouse Event文字列から座標を取り出す'''
-    # print(event_str)   
-    x_match = re.search(r"x=(\d+)", event_str)
-    y_match = re.search(r"y=(\d+)", event_str)
-
-    mouse_x = int(x_match.group(1)) if x_match else -1
-    mouse_y = int(y_match.group(1)) if y_match else -1
-
-    return (mouse_x, mouse_y)
-
-
 def one_chr(image: Image.Image, font: ImageFont.FreeTypeFont, size,
            code, bg='#c8c8c8'):
     '''一文字をimageに描画'''
