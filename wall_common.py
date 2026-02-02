@@ -49,17 +49,15 @@ class RGBColor:
         return self.r & 0xff, self.g & 0xff, self.b & 0xff
 
     def black(self):
-        self.r = 0
-        self.g = 0
-        self.b = 0
+        self.r, self.g, self.b = 0,0,0
         return self.r, self.g, self.b
 
     def xtoc(self, s: str):
-        if len(s) < 6:
-            raise ValueError('Invalid color format')
-        if s.startswith('#'):
-            s = s[1:]
-        self.r, self.g, self.b = (int(s[i*2+1:i*2+3], 16) & 0xff for i in range(3))
+        s = s.lstrip('#')
+        try:
+            self.r, self.g, self.b = (int(s[i:i+2], 16) & 0xff for i in (0,2,4))
+        except ValueError:
+            self.r, self.g, self.b = 0,0,0
         return self.r, self.g, self.b
         
     def itoc(self, r, g, b):
@@ -136,6 +134,22 @@ def is_param(x:str):
     return x in PARAMVALS
 
 
+class EfxModules:
+    '''AfterEffectモジュール情報'''
+    def __init__(self):
+        self.modules = []
+        self.mod_desc = {}
+        self.mod_type = {}
+
+    def add_module(self, module_name: str, module_desc: str,
+                   spec_dict):
+        if module_name.startswith('efx_'):
+            module_name = module_name.split('efx_')[1]
+        if module_name not in self.modules:
+            self.modules.append(module_name)
+            self.mod＿desc[module_name] = module_desc
+            self.mod_type[module_name] = spec_dict
+
 # 背景パターン
 def rgb_random_jitter(color: RGBColor, jitter):
     '''(R,G,B)に対してそれぞれ±jitterの幅でランダムに変化'''
@@ -184,6 +198,23 @@ def sat_attenate(image, ratio):
 def rgb_lerp(c1, c2, t):
     ''' RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)'''
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
+
+
+def bg_and_font(color):
+    '''色指定文字列かRGBColorで色を受け取り、前景テキストと色指定文字列を返す'''
+    if isinstance(color,str):
+        color = to_rgb(color)
+    elif isinstance(color, RGBColor):
+        color = color.ctoi()
+    rgb = color         
+
+    l = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2])/255
+    # ガンマ補正なし,閾値0.89が一般的らしいがおじさんの目にやさしく閾値を低く
+    if l > 0.70:
+        f = '#000000'
+    else:
+        f = '#ffffff'
+    return f, rgb_string(rgb)
 
 
 # def draw_vertical_gradient_rgb(draw, width, height,

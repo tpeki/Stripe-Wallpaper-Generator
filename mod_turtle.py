@@ -602,9 +602,9 @@ def generate(p: Param, command=''):
     height = p.height
     pen_color = p.color1
     bg_color = p.color2
-    jitter = p.color_jitter
-    pen_size = p.pwidth
-    pen_step = p.pheight
+    jitter = clip8(p.color_jitter)
+    pen_size = min(max(p.pwidth,1),200)
+    pen_step = min(max(p.pheight,1),100)
     start_x = p.width // 2
     start_y = p.height // 2
     intrctv = p.pdepth == 0

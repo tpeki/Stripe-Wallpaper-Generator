@@ -34,8 +34,8 @@ def generate(p: Param):
     """
     width = p.width
     height = p.height
-    stripe_width = p.pwidth
-    stripe_height = p.pheight
+    stripe_width = min(max(p.pwidth,1),width)
+    stripe_height = min(max(p.pheight,1),height)
     
     base_r, base_g, base_b = p.color1.ctoi()
     eps = p.color_jitter

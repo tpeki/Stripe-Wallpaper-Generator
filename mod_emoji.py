@@ -373,7 +373,7 @@ def generate(p: Param):
     base_color = p.color1
     jitter = p.color_jitter
     satulation = np.clip(p.sub_jitter, 0, 100)
-    char_num = p.pwidth
+    char_num = min(max(p.pwidth, 1), 50)
     form = p.pheight
 
     # 背景となるimageを生成

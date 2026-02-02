@@ -51,8 +51,8 @@ def generate(p: Param):
               clip8(p.color2.b+bj)) 
 
     color3 = p.color3.ctoi()  # Color3はゆらぎなし
-    cell_width = int(p.pwidth)
-    aspect = int(p.pdepth)
+    cell_width = min(max(int(p.pwidth),1),min(image_width, image_height))
+    aspect = int(p.pdepth) if p.pdepth != 0 else 100
     cell_count = abs(int(p.pheight)) if p.pheight != 0 else 1
     reverse = p.pheight > 0
     

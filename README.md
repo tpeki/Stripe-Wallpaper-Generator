@@ -1,5 +1,5 @@
 # wallpaper.pyw		壁紙用のシンプルなイメージを生成する
-V2.1.0  2026/01/19
+V2.1.2  2026/02/02
 
 ## 概要
 複雑なことはしません。
@@ -9,7 +9,7 @@ Wallpaper用の画像を生成します。
 Pythonのライブラリとして、以下のものを利用します。pipなどでライブラリをインストールして利用してください。 作成時点の各バージョンを()で追記してあります
 - pillow  (12.0.0)
 - TkEasyGUI  (1.0.40)
-- numpy (2.2.6)  一部モジュールで利用
+- numpy (2.2.6)
 
 ## 利用方法
 一式を同じディレクトリに配置し、pythonにパスが通っている環境で wallpaper.pyw スクリプトを起動してください。
@@ -46,20 +46,34 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 ※ ただし、モジュールによってどのパラメータをどういう使い方にしているかが異なるため、GUI版でパラメータを変えた際の違いを確認してください。
 ```
 ## モジュール
+
+ 　　壁紙パターンをmod_*.py で追加できます
+
 - bias: 斜め帯
 - chevron: ギザギザボーダー
+- dune: 砂丘？
 - emoji: 絵文字(0:敷石 1:螺旋) 
+- footprint: 足跡 (直線か時計回りのみ対応)
 - gangi: 階段
+- garland: 垂れ幕  もしくは連提灯通り
 - hexmap: グラデ六角タイル
 - hexmaze: 森の六角迷路
 - hilbert: ヒルベルト曲線
-- packingbubble: グラデーション円
+- packingbubble: グラデーション泡
 - peano: ペアノ曲線
 - penrose: ペンローズタイル
 - scallop: ホタテ貝
 - stripe: 縦ストライプ・モダン
+- tartan: タータン風チェック 柄エディタ付き
+- tiles: 正方形タイル (mode: 0=3色ミックス, 1=2色市松, 2=パース)
 - turtle: タートルコマンド描画
 - waves: 青海波
+
+## 効果モジュール
+
+　　実装方法を検討中； efx_*.py
+
+- shade: 型抜きして影付きで貼り付け
 
 ## Turtle Graphics
 
@@ -98,4 +112,12 @@ Microsoftさん、Windowsスポットライトのあまりの鬱陶しさにこ�
 KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。これがなければGUI化は考えませんでした。
 
 
->>>>>>
+>### サンプル
+>
+>samplesの下に各モジュールを使ったサンプル画像を置きました。デフォルトパラメータをいじって保存したものなので、参考まで。
+>
+>![hexmaze](samples\hexmaze.png)![hexmaze](samples\stripe.png)![penrose](samples\scallop.png)
+>
+>画像サンプルとともに、tartanのサンプルセットも置いてあります。セットパターンファイル(*.ttn)は、mod_tartan のセットパターンエディタで読み込んでください。
+
+![tartan.ttn](samples\tartan.png)

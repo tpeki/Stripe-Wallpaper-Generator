@@ -81,8 +81,8 @@ def generate(p: Param):
     height = p.height
     line_color = p.color1.ctoi()
     bg_color = p.color2
-    line_width = p.pwidth
-    iteration = p.pheight
+    line_width = min(max(p.pwidth,1),100)
+    iteration = min(max(p.pheight,1),10)
     jitter = p.color_jitter
     
     # 1. グリッドの分割数を決定 (2^n)

@@ -145,7 +145,7 @@ def generate(p: Param):
     c3 = p.color3.ctox()  # RGBColor -> "#rrggbb"
     p.pheight = np.clip(p.pheight, 0, 2)
     hide_outline = p.pheight & 0x01  # 分割線あり
-    iterations = p.pwidth
+    iterations = max(p.pwidth,1)
 
     triangles = generate_triangles(width, height, iterations)
 

@@ -92,10 +92,10 @@ def generate(p: Param):
     c2 = p.color2.ctoi()  # 地色
     jitter = p.color_jitter  # 波色変化
     grad = p.sub_jitter  # グラデーション
-    lwidth = p.sub_jitter2  # 線幅(%)
-    radius = p.pwidth  # 波半径
-    wcounts = p.pheight  # 波重畳数
-    obl = p.pdepth  # 扁平率(%)
+    lwidth = min(max(p.sub_jitter2,1),100)  # 線幅(%)
+    radius = min(max(p.pwidth,10),int(min(width,height)/2))  # 波半径
+    wcounts = min(max(p.pheight,0),radius-1)  # 波重畳数
+    obl = min(max(p.pdepth,1),100)  # 扁平率(%)
 
     # 描画開始
     img = Image.new("RGB", (width, height), c2)

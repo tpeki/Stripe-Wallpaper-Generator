@@ -38,12 +38,12 @@ def generate(p: Param):
     w = p.width
     h = p.height
     cjit = p.color_jitter
-    sjit = p.sub_jitter / 100
+    sjit = min(max(p.sub_jitter, -100),400) / 100
     color1 = brightness(rgb_random_jitter(p.color1, cjit), s=sjit)
     color2 = brightness(rgb_random_jitter(p.color2, cjit), s=sjit)
     color3 = brightness(rgb_random_jitter(p.color3, cjit), s=sjit)
-    bandwidth = p.pwidth
-    angle = p.pheight
+    bandwidth = min(max(p.pwidth,1),w)
+    angle = p.pheight % 360
 
     c1 = color1.ctoi()
     c2 = color2.ctoi()

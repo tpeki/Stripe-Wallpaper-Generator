@@ -46,8 +46,8 @@ def generate(p: Param):
     height = p.height
     color1 = p.color1
     border = p.color2.ctox()
-    size = p.pwidth
-    jwidth = p.pheight
+    size = min(max(6,p.pwidth),width)
+    jwidth = min(max(0,p.pheight),int(size*0.85))
     jitter = p.color_jitter
     tone = min(1.0, max(0.0, 1.0 - (p.sub_jitter/100)))
     angl_num = min(6, max(p.sub_jitter2, 1))

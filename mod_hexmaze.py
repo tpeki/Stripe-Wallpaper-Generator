@@ -204,7 +204,12 @@ def draw_paths(draw, p: Param, grid, attr, offset_x, offset_y):
 def generate(p: Param):
     width = p.width
     height = p.height
-    radius = p.pwidth
+    radius = min(max(6,p.pwidth),int(min(width,height)/4))
+    p.pwidth = radius
+    path_width = min(max(p.pheight, 2), int(radius*1.2))
+    p.pheight = path_width
+    jwidth = min(max(p.pdepth,0),radius)
+    p.pdepth = jwidth
     cstart = brightness(p.color2, f=0.9)
     cend = brightness(p.color2, f=0.4)
     

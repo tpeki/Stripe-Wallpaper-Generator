@@ -45,19 +45,42 @@ def search_modules(modlist: Modules, plugin_dir):
         if modname.startswith('mod_'):
             modname = modname[4:]
         
-        # print(modf, '---', modname)
         spec = impl.spec_from_file_location(modname, modf)
         module = impl.module_from_spec(spec)
         sys.modules[modname] = module
         spec.loader.exec_module(module)
 
         if hasattr(module, 'intro'):
-            fn = getattr(module, 'intro')
-            print( 'module: ', fn(modlist, modname))
-            # print(f'Load {modname}')
+            getattr(module, 'intro')(modlist, modname)
             modules[modname] = module
 
+    print(f'Loaded {len(modules)} pattern modules.')
     return modules
+
+
+def search_aftereffects(efxlist: EfxModules, plugin_dir):
+    aftereffects = {}
+
+    if plugin_dir is None:
+        plugin_dir = pa.dirname(__file__)  # directory part
+    plugin_pat = 'efx_*.py'  # filename pattern
+    
+    for modf in glob.glob(plugin_pat, root_dir=plugin_dir):
+        modname = pa.splitext(modf)[0]
+        if modname.startswith('efx_'):
+            modname = modname[4:]
+        
+        spec = impl.spec_from_file_location(modname, modf)
+        module = impl.module_from_spec(spec)
+        sys.modules[modname] = module
+        spec.loader.exec_module(module)
+
+        if hasattr(module, 'intro'):
+            getattr(module, 'intro')(efxlist, modname)
+            aftereffects[modname] = module
+
+    print(f'Loaded {len(aftereffects)} after-effect modules.')
+    return aftereffects
 
 
 # モジュールファイルで作成必要なAPI関数
@@ -102,17 +125,20 @@ def search_modules(modlist: Modules, plugin_dir):
 # (2) モジュールの関数を呼び出す
 # modlist.modules == [module-name1, module-name2, ...] : 導入したモジュール名
 # modlist.mod_gui[module-name] : モジュールで利用するGUI項目、入ってるものだけ表示
-# m[module-name].default_param(p) : おすすめ初期パラメータを設定
-# image = m[module-name].generate(p)  : 画像を生成
+# mods[module-name].default_param(p) : おすすめ初期パラメータを設定
+# image = mods[module-name].generate(p)  : 画像を生成
 
 
 # ----
 # メインGUI
 # ----
-def layout(modlist):
+def layout(modlist, efxlist):
+    x = ['AE_'+item for item in efxlist.modules]
     menudef = [['File', ['Save', 'Exit']],
-                ['Module', modlist.modules],
-                ]
+               ['Module', modlist.modules],
+               ['Effects', x],
+               ]
+    
     
     color_column_layout = [[sg.Text('Base Color:', key='-color1-0',
                                     size=(8,1)),
@@ -229,21 +255,6 @@ def set_module(window, modlist, module_name):
     return True
 
 
-def bg_and_font(color):
-    if isinstance(color,str):
-        rgb = to_rgb(color)
-    elif isinstance(color, RGBColor):
-        rgb = color.ctoi()
-
-    l = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2])/255
-    # ガンマ補正なし,閾値0.89が一般的らしいがおじさんの目にやさしく閾値を低く
-    if l > 0.70:
-        f = '#000000'
-    else:
-        f = '#ffffff'
-    return f, rgb_string(rgb)
-
-
 def set_param(window, param, mod_gui):
     for elem in PARAMVALS:
         if elem in mod_gui:
@@ -286,42 +297,42 @@ def set_window_geom(param:Param, window: sg.Window):
                 pass
     return
 
-def gui_main(modlist: Modules, m, param: Param):
+def gui_main(modlist: Modules, mods, param: Param,
+             efxlist: EfxModules, exfs):
     '''gui_main(modlist:Modules, dict-module_funcs, p:Parameter)
         GUI動作メイン処理
     '''
-    lo = layout(modlist)
+    lo = layout(modlist, efxlist)
     wn = sg.Window('Wallpaper Factory', layout=lo)
     set_window_geom(param, wn)
 
     modname = DEFAULT_MODULE
     if set_module(wn, modlist, modname):
-        m[modname].default_param(param)
+        mods[modname].default_param(param)
         param.pattern = modname
         set_param(wn, param, modlist.mod_gui[modname])
 
-    image = m[modname].generate(param)
+    image = mods[modname].generate(param)
     wn['-img-'].update(data=image)
 
     print('-- main loop --')
     while True:
         ev, va = wn.read()
-        # print(ev, isinstance(ev, str), va)
 
         if ev == sg.WINDOW_CLOSED or ev == 'Exit' or ev == '-done-':
             break
         elif ev == 'Save' or ev == '-ok-':
             base=param.pattern
-            fname = param.file_name()
+            fname = pa.basename(param.file_name())
             fname = get_savefile(fname)
             if fname == '':
                 continue
             image.save(fname)
-            param.savefile = fname
-            wn['-fname-'].update(pa.basename(param.savefile))
+            param.savefile = pa.basename(fname)
+            wn['-fname-'].update(param.savefile)
             continue
         elif ev == '-redo-':
-            image = get_image_thread(wn, param, m, modname)
+            image = get_image_thread(wn, param, mods, modname)
             if image is not None:
                 wn['-img-'].update(data=image)
             else:
@@ -332,10 +343,10 @@ def gui_main(modlist: Modules, m, param: Param):
             set_module(wn, modlist, modname)
             param.pattern = modname
             param.savefile = ''
-            m[ev].default_param(param)
+            mods[ev].default_param(param)
             set_param(wn,param, modlist.mod_gui[modname])
 
-            image = get_image_thread(wn, param, m, modname)
+            image = get_image_thread(wn, param, mods, modname)
             if image is not None:
                 wn['-img-'].update(data=image)
             else:
@@ -355,8 +366,8 @@ def gui_main(modlist: Modules, m, param: Param):
             # print('-img-', ev, va)
             set_window_geom(param, wn)
             # print(param.wwidth, param.wheight, param.wposx, param.wposy)
-            if hasattr(m[modname], 'desc'):
-                retv = m[modname].desc(param)
+            if hasattr(mods[modname], 'desc'):
+                retv = mods[modname].desc(param)
                 if isinstance(retv, Image.Image):
                     image = retv
                     wn['-img-'].update(data=image)
@@ -417,8 +428,8 @@ def get_image_thread(window, param, modules, modname):
 # ----
 # CLI(非インタラクティブ)動作メイン
 # ----
-def batch_generate(m, pattern, args, param):
-    m[pattern].default_param(param)
+def batch_generate(mods, pattern, args, param):
+    mods[pattern].default_param(param)
     for name in ['jitter1', 'jitter2', 'jitter3',
                  'pwidth', 'pheight', 'pdepth']:
         v = getattr(args, name, None)
@@ -429,7 +440,7 @@ def batch_generate(m, pattern, args, param):
         if v is not None:
             setattr(param, name, RGBColor(v))  # strのままじゃ駄目
 
-    img = m[pattern].generate(param)
+    img = mods[pattern].generate(param)
     drw = ImageDraw.Draw(img)
     font = ImageFont.truetype('arial.ttf', 10)
     drw.text((param.width-len(pattern)*10,param.height-12),text=pattern,
@@ -460,6 +471,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='壁紙ジェネレータ')
     args_set(parser)
+
     exe = pa.basename(sys.executable).lower()
     if ('--help' in sys.argv or '-h' in sys.argv) and exe == 'pythonw.exe':
         helptext = parser.format_help()
@@ -468,8 +480,9 @@ if __name__ == '__main__':
     args = parser.parse_args()    
     
     modlist = Modules()
-    m = search_modules(modlist, args.plugin_dir)
-    # print(modlist, '\n=========')
+    mods = search_modules(modlist, args.plugin_dir)
+    efxlist = EfxModules()
+    efxs = search_aftereffects(efxlist, args.plugin_dir)
 
     param = Param()
     
@@ -486,13 +499,13 @@ if __name__ == '__main__':
         else:
             print(buf.getvalue())
     elif args.module is None:
-        gui_main(modlist, m, param)
+        gui_main(modlist, mods, param, efxlist, efxs)
     else:
         pattern = args.module
         if pattern.lower() == 'random':
             pattern = modlist.modules[random.randint(0,len(modlist.modules)-1)]
         
-        img = batch_generate(m, pattern, args, param)
+        img = batch_generate(mods, pattern, args, param)
         print(f'Generated {pattern}')
         if len(args.files) > 0:
             f = pa.splitext(args.files[0])[0]+'.png'

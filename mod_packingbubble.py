@@ -73,10 +73,10 @@ def generate(p: Param):
     bg_color2 = p.color3
     circle_color = p.color1
     circle_jitter = p.color_jitter
-    grad_angle = p.sub_jitter
-    max_r = p.pwidth
-    min_r = p.pheight
-    margin = p.pdepth
+    grad_angle = p.sub_jitter % 360
+    max_r = min(max(p.pwidth, 10), int(width/2))
+    min_r = min(max(p.pheight, 10), max_r)
+    margin = min(max(p.pdepth, -100), 1000)
     
     img = horizontal_gradient_rgb(width, height, bg_color1, bg_color2)
 

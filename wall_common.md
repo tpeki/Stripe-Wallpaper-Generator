@@ -47,6 +47,9 @@
 
 - to_rgb((r,g,b)) 、 to_rgb([r,g,b])または to_rgb(s:str)
   - 色指定パラメータをr,g,b の数値にして返す
+- bg_and_font(color: str | RGBColor | tuple[int] ) -> str, str
+   - 背景色を受け取り、前景テキスト色と背景色の色指定文字列を返す
+
 
 
 ## Param： パラメータ引数クラス
@@ -116,6 +119,25 @@
   - {<要素名>: <説明文>} として利用するGUI要素と、そのキャプションを返す
   - <要素名>はGUI要素名で固定だが、jitterやgeometyは単なる数値なので、generate内でどう使ってもよい
   - <説明文>はgenerate()内でどう使われるかを端的に記載
+
+## EfxModules：AfterEffectモジュール情報クラス
+
+### attribute
+
+- modules: list  読み込んだモジュールの名称
+- mod_desc: dictionary of str  読み込んだモジュールの説明文
+- mod_type: dictionary of dictionary  読み込んだモジュールで提供する関数
+  - mask： マスク生成関数名  <関数名>(W,H)のサイズのLイメージを生成
+  - proc：合成関数(関数名,引数タイプ)  <関数名>(<イメージ>, <引数>) でRGB/RGBAイメージを生成、引数はmod_typeの辞書見出(maskなど)にある関数の戻り値
+
+### 使い方例
+
+- ExfModules.modules で読み込み済モジュールを確認、ExfModuiles.mod_type[<モジュール名>] でAdterEffectモジュールの提供機能名を取得。
+  - 例： mod_type['shade']  shadeモジュールで提供されるサブモジュール情報、
+  -   mod_type\['shade']\['mask'] = ’draw_ladder_mask’  shadeモジュールで提供されるmask関数 引数は draw_ladder_mask(width, height) になる
+  - mod_type\['shade']\['proc'] = ('add_silhouette','mask')  shadeモジュールで提供されるproc関数 引数は add_sillhouette(base_image, mask_image) になる
+- proc= (<関数名>,None) とか (<関数名>,<ファイル名>) といったケースも考えられるが、生煮えでどこまで対応できるか検討中
+- GUIも検討中 
 
 ## 背景画像生成：
 

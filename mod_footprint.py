@@ -209,9 +209,9 @@ def generate_linear(p: Param):
     bg1, bg2 = p.color2, p.color3
 
     CANVAS_W, CANVAS_H = p.width, p.height
-    W = p.pdepth  # 足跡サイズ
+    W = min(max(p.pdepth,10),int(min(CANVAS_W,CANVAS_H)/4))  # 足跡サイズ
     la = p.sub_jitter % 180  # 傾き角度（度）
-    steps = p.color_jitter  # 足跡の数
+    steps = max(p.color_jitter, 2)  # 足跡の数
     start_x, start_y = p.pwidth, p.pheight
     jitter = JITTER
 
@@ -268,10 +268,10 @@ def generate_arc(p : Param):
 
     CANVAS_W, CANVAS_H = p.width, p.height
     start_x, start_y = p.pwidth, p.pheight
-    start_angle_deg = p.sub_jitter
+    start_angle_deg = p.sub_jitter % 360
     cr = p.sub_jitter2
-    W = p.pdepth
-    steps = p.color_jitter
+    W = min(max(p.pdepth,10),int(min(CANVAS_W,CANVAS_H)/4))
+    steps = max(p.color_jitter, 2)
     jitter = JITTER
 
     canvas = vertical_gradient_rgb(CANVAS_W, CANVAS_H,

@@ -75,8 +75,8 @@ def create_scallop_tile(max_r, n_ribs, rib_depth, shadow_contrast):
 def generate(p: Param):
     img_width = p.width
     img_height = p.height
-    max_r = p.pwidth
-    n_ribs = p.pheight
+    max_r = min(max(p.pwidth,20),int(img_width/2))
+    n_ribs = min(max(p.pheight,0),240)
     base_color = p.color1
     jitter = np.clip(p.color_jitter, 0, 100)
     shadow = np.clip(p.sub_jitter, 0, 100)

@@ -1,7 +1,7 @@
 import re
 import copy
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 import TkEasyGUI as sg
 from wall_common import *
 from filedialog import *
@@ -17,6 +17,11 @@ from filedialog import *
 スコットランドの家紋のような位置づけなので、勝手にタータンと称しては
 いけない。古くは、戦場で誰だか判らなくなった遺体の身元確認に使われていた
 という説もある。
+
+2026/02/01 エディタにRewrite(再整形), 2倍、1/2倍ボタンを追加
+　セットパターンは行番号が実際には無視されるので、表示エリアの内容を
+セットパターンテキストとして成形する Reform機能を追加
+　パターン内の各色幅を2倍・1/2倍するボタンを追加
 '''
 
 # ----
@@ -25,7 +30,8 @@ from filedialog import *
 SPECIAL_COLOR1 = (0xf8, 0xf8, 0x44)  # 7 特色1 黄
 SPECIAL_COLOR2 = (0xf8, 0x11, 0xf8)  # 8 特色2 桃
 SPECIAL_COLOR3 = (0xfc, 0xe6, 0x8d)  # 9 特色3 卵
-
+BRIGHTNESS = 100
+SATURATION = 100
 PERIOD = 6
 DUTY = 50
 
@@ -48,6 +54,7 @@ tartan_preserv = {
 def intro(modlist: Modules, module_name):
     modlist.add_module(module_name, 'タータンチェック風(＋セットエディタ)',
                        {'color1':'特色1', 'color2':'特色2', 'color3':'特色3',
+                        'color_jitter':'明るさ(%)', 'sub_jitter':'彩度(%)',
                         'pwidth':'織目数', 'pheight':'DUTY比(%)'})
     return module_name
 
@@ -56,6 +63,8 @@ def default_param(p: Param):
     p.color1.itoc(*SPECIAL_COLOR1)
     p.color2.itoc(*SPECIAL_COLOR2)
     p.color3.itoc(*SPECIAL_COLOR3)
+    p.color_jitter = BRIGHTNESS
+    p.sub_jitter = SATURATION
     p.pwidth = PERIOD
     p.pheight = DUTY
     return p
@@ -66,10 +75,19 @@ def default_param(p: Param):
 # ----
 def layout():
     left = sg.Image(key='-test-', size=(300,300))
+    macros = [[sg.Button('Rewrite', key='-t_rwt-'),
+               sg.Button('2X', key='-t_dbl-'),
+               sg.Button('1/2', key='-t_hlf-'), ],
+              [sg.Button('Flip&Paste', key='-t_flp-')],
+              ]
     right = [[sg.Text('Pallet'),
-              sg.Image(key='-pallet-', size=(136,56), enable_events=True)],
+              sg.Image(key='-pallet-', size=(136,56), enable_events=True),
+              sg.Text('', expand_x=True),
+              sg.Column(macros, expand_x=True),
+              ],
              [sg.Multiline('', key='-t_pat-',size=(20,12),
-                           background_color='#f0eea0',text_align='left',
+                           background_color='#f0eea0',
+                           text_align='left',
                            expand_x=True, expand_y=True)],
              [sg.Button('Delete', key='-t_del-'),
               sg.Text('C:',text_align='right', size=(4,1)),
@@ -93,7 +111,7 @@ def layout():
                sg.Button('Apply', key='-t_ok-', background_color='#ddffdd'),
                ]
 
-    return [[left, sg.Column(layout=right, expand_x=True)],
+    return [[left, sg.Column(layout=right, expand_x=True, expand_y=True)],
             buttons]
 
 
@@ -127,6 +145,66 @@ def pattxt(pattern):
 
 
 # ttnファイルの読み込み
+def read_color_section(buf, lno):
+    cset = [None]*10
+    for l2 in range(lno,len(buf)):
+        l = buf[l2].strip()
+        if len(l) < 1:
+            lno += 1
+            continue
+        if l[0] == '[':
+            break
+        cc = l.split('=')
+        # print(cc)
+        if len(cc) >= 2:
+            try:
+                cn = int(cc[0][-1:])
+            except ValueError:
+                continue
+            rgb = to_rgb(strtotuple(cc[1]))
+            cset[cn] = rgb
+        lno += 1
+        continue
+    return cset, lno
+
+    
+def read_pattern_section(buf, lno):
+    pat = []
+    for l2 in range(lno,len(buf)):
+        #print(l2,':', buf[l2])
+        l = buf[l2].strip()
+        if len(l) < 1:
+            lno += 1
+            continue
+        if l[0] == '[':
+            break
+
+        cc = l.split(':')
+        # print(cc)
+        if len(cc) >= 2:
+            # 行番号部分は読み捨て
+            cc = cc[1].split('*')
+            if len(cc) >= 2:
+                r = re.search(r'\d+', cc[0])
+                if r:
+                    col = np.clip(int(r.group()),0,9)
+                    r = re.search(r'\d+', cc[1])
+                    if r:
+                        w = min(max(1,int(r.group())),3840)
+                        pat.append((col,w))
+            #print(cc, pat[-1])
+        lno += 1
+        continue
+    return pat, lno
+
+
+def pattern_resize(pat, sc):
+    for p in range(len(pat)):
+        c,w = pat[p]
+        pat[p] = (c, min(max(1,int(w*sc)),3840))
+    return pat
+        
+
 def load_pattern(fname):
     '''fnameからセットパターン及び利用色情報を読み込み、text, csetを返す'''
     with open(fname, mode='r') as f:
@@ -135,39 +213,22 @@ def load_pattern(fname):
     cset = [None]*10
     pat = []
     section = None
-    for l in buf:
-        l = l.strip()
+    lno = 0
+    for lno in range(len(buf)):
+        l = buf[lno].strip()
         # print(f'{section}:', l)
         if '[Colors]' in l:
             section = 'c'
+            lno += 1
+            cset_r, lno = read_color_section(buf, lno)
+            for no in range(10):
+                cset[no] = cset_r[no] if cset_r[no] is not None else None
             continue
         elif '[Pattern]' in l:
             section = 'p'
+            lno += 1
+            pat, lno = read_pattern_section(buf, lno)
             continue
-        if section == 'c':  # colors
-            cc = l.split('=')
-            # print(cc)
-            if len(cc) >= 2:
-                try:
-                    cn = int(cc[0][-1:])
-                except ValueError:
-                    continue
-                rgb = to_rgb(strtotuple(cc[1]))
-                cset[cn] = rgb
-            continue
-        elif section == 'p':
-            cc = l.split(':')
-            # print(cc)
-            if len(cc) >= 2:
-                try:
-                    ln = int(cc[0])
-                except ValueError:
-                    continue
-                cc = cc[1].split('*')
-                # print(cc)
-                col = int(cc[0].strip()[-1:])
-                w = int(cc[1].strip())
-                pat.append((col,w))
     for i in range(10):
         if cset[i] is None:
             cset[i] = (0,0,0)
@@ -243,7 +304,10 @@ def desc(p: Param):
                     y = 5 if y>31 else 0
                     c = y + x
                     # print(va['event'],x, y, c)
-                    wn['-t_col-'].update(str(c))
+                    # 色名表示部分には背景色をつける
+                    fg, bg = bg_and_font(cset[c])
+                    wn['-t_col-'].update(str(c),
+                                         text_color=fg, background_color=bg)
                     wn['-t_ctp-'].update(f'({cset[c][0]},{cset[c][1]},{cset[c][2]})')
             continue
         elif ev == '-t_add-':  # 色・幅をセットに追加
@@ -258,7 +322,7 @@ def desc(p: Param):
             pat = []
         elif ev == '-t_ld-':  # 読み込み
             fname = get_openfile('', filetypes=[('Tartan set','.ttn'),])
-            if fname != '' or fname is not None:
+            if fname != '' and fname is not None:
                 old_cset = copy.copy(cset)
                 pat, cset = load_pattern(fname)
                 wn['-t_file-'].update(fname)
@@ -270,11 +334,51 @@ def desc(p: Param):
         elif ev == '-t_sv-':  # 保存
             oldf = wn['-t_file-'].get()
             fname = get_savefile(oldf, filetypes=[('Tartan set','.ttn'),])
-            if fname != '' or fname is not None:
+            if fname != '' and fname is not None:
                 save_pattern(fname, pat, cset)
                 wn['-t_file-'].update(fname)
                 p.savefile = fname
             continue
+        elif ev in ('-t_rwt-', '-t_dbl-', '-t_hlf-'):
+            # リライト/倍幅化/半幅化
+            opat = copy.copy(pat)
+            ptext = (wn['-t_pat-'].get()+'\n').splitlines()
+            # 編集されたパターン文字列をpatに読み込む
+            pat,_ = read_pattern_section(ptext, 1)
+            if len(pat) < 2:
+                pat = copy.copy(opat)  # 空になってたら元に戻す
+            elif ev == '-t_dbl-':
+                pat = pattern_resize(pat, 2)  # 倍幅化
+            elif  ev == '-t_hlf-':
+                pat = pattern_resize(pat, 0.5)  # 半幅化
+            # テキストにして表示領域を更新
+            ptxt,_ = pattxt(pat)
+            wn['-t_pat-'].update(ptxt)
+            if pat == opat:
+                continue
+        elif ev == '-t_flp-':
+            print(va)
+            ml = wn['-t_pat-'].widget
+            if ml.tag_ranges("sel"):
+                # 選択範囲の先頭と最後を取得
+                st = int(ml.index('sel.first').split('.')[0])-1
+                ed = int(ml.index('sel.last').split('.')[0])-1
+                # バッファ先頭が[Pattern]ならオフセットあり
+                firstline = ml.get('1.0','2.0')
+                offset = 1 if 'attern' in firstline else 0
+                # 現パターン長までの間で、選択範囲のパターンを取得
+                lm = len(pat)
+                addpat = []
+                for cptr in range(st-offset, ed-offset+1):
+                    if cptr < lm:
+                        addpat.append(pat[cptr])
+                # 反転させて末尾にペースト
+                for itm in reversed(addpat):
+                    pat.append(itm)
+                #print(f'range: {st},{ed}, line1={ml.get("1.0","2.0")}')
+            else:
+                #print('No Sel:',ml.tag_ranges("sel"))
+                continue
         else:
             continue
         
@@ -317,7 +421,9 @@ def generate(p: Param, pattern=None):
     for i in range(10):
         color.append(np.array(list(cset[i])))
 
-    period = p.pwidth
+    brightness = max(0.0, p.color_jitter / 100.0)
+    saturation = max(0.0, p.sub_jitter / 100.0)
+    period = min(max(p.pwidth,1),40)
     duty = np.clip(p.pheight, 0, 100) / 100.0
 
     # パターンの定義
@@ -361,7 +467,11 @@ def generate(p: Param, pattern=None):
     shade = ((xx + yy) % 2 * 10).astype(np.int16)
     tartan_data = np.clip(tartan_data.astype(np.int16) - shade[:, :, np.newaxis], 0, 255).astype(np.uint8)
 
-    return Image.fromarray(tartan_data)
+    image = Image.fromarray(tartan_data)
+
+    image = ImageEnhance.Color(image).enhance(saturation)
+    image = ImageEnhance.Brightness(image).enhance(brightness)
+    return image
 
 
 # ----

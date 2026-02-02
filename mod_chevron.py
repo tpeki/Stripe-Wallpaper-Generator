@@ -29,7 +29,7 @@ def generate(p: Param):
     # 座標グリッド生成
     width = p.width
     height = p.height
-    swidth = p.pwidth
+    swidth = min(max(p.pwidth,1),min(width, height))
     eps = p.color_jitter
 
     y, x = np.mgrid[0:height, 0:width]
