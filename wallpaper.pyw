@@ -144,19 +144,22 @@ def layout(modlist, efxlist):
                                     size=(8,1)),
                             sg.Text('0,0,0', key='-color1-1',
                                     size=(9,1)),
-                            sg.Button('...', key='-color1-2')
+                            sg.Button('...', key='-color1-2'),
+                            sg.Button('?', key='-color1-3')
                             ],
                            [sg.Text('Second Color:', key='-color2-0',
                                     size=(8,1)),
                             sg.Text('0,0,0', key='-color2-1',
                                     size=(9,1)),
-                            sg.Button('...', key='-color2-2')
+                            sg.Button('...', key='-color2-2'),
+                            sg.Button('?', key='-color2-3')
                             ],
                            [sg.Text('Third Color:', key='-color3-0',
                                     size=(8,1)),
                             sg.Text('0,0,0', key='-color3-1',
                                     size=(9,1)),
-                            sg.Button('...', key='-color3-2')
+                            sg.Button('...', key='-color3-2'),
+                            sg.Button('?', key='-color3-3')
                             ]]
     jitter_column_layout = [[sg.Text('Color Mod1:', key='-color_jitter-0',
                                     size=(10,1)),
@@ -224,6 +227,7 @@ def hide_param(window, param):
     if param in ('color1', 'color2', 'color3'):
         window[f'-{param}-1'].update(text_color='#000000', bg='#f0f0f0')
         window[f'-{param}-2'].update('  ')        
+        window[f'-{param}-3'].update(' ')        
 
 
 def show_param(window, param, desc):
@@ -235,6 +239,7 @@ def show_param(window, param, desc):
     window[f'-{param}-0'].update(desc)
     if param in ('color1', 'color2', 'color3'):
         window[f'-{param}-2'].update('...')        
+        window[f'-{param}-3'].update('?')        
 
 
 def set_module(window, modlist, module_name):
@@ -302,6 +307,9 @@ def gui_main(modlist: Modules, mods, param: Param,
     '''gui_main(modlist:Modules, dict-module_funcs, p:Parameter)
         GUI動作メイン処理
     '''
+
+    pick_color = {'pos':(0,0), 'c':None, 'e':None}
+    
     lo = layout(modlist, efxlist)
     wn = sg.Window('Wallpaper Factory', layout=lo)
     set_window_geom(param, wn)
@@ -314,6 +322,36 @@ def gui_main(modlist: Modules, mods, param: Param,
 
     image = mods[modname].generate(param)
     wn['-img-'].update(data=image)
+
+    def on_click(event):
+        print('onclick')
+        x,y = event.x, event.y
+        if 0 <= x < image.width and 0 <= y < image.height:
+            pick_color['pos'] = (x,y)
+            pick_color['c'] = image.getpixel((x,y))
+            wgt.unbind('<Button-1>')
+
+    def loop():
+        if pick_color['c'] is not None and pick_color['e'] is not None:
+            print('loop', pick_color['e'])
+            if wn[pick_color['e']].get() == '?':
+                x,y = pick_color['pos']
+                dw,dh = wn['-img-'].size
+                iw,ih = image.size
+                new_color = image.getpixel((x/dw*iw,y/dh*ih))
+                setattr(param, pick_color['e'][1:-2], RGBColor(new_color[0:3]))
+                fg,bg = bg_and_font(new_color[0:3])
+                r,g,b = to_rgb(bg)
+                wn[pick_color['e'][:-1]+'1'].update(f'{r},{g},{b}',text_color=fg,
+                                           background=bg)
+            pick_color['c'] = None
+            wgt = wn['-img-'].widget
+            wgt.unbind('<Button-1>')
+            wgt.configure(cursor='arrow')
+        if wn.is_alive():
+            wn.window.after(50,loop)
+
+    wn.window.after(50,loop)
 
     print('-- main loop --')
     while True:
@@ -351,6 +389,13 @@ def gui_main(modlist: Modules, mods, param: Param,
                 wn['-img-'].update(data=image)
             else:
                 print("DON'T CLOSE DIALOGUE")
+            continue
+        elif ev in ('-color1-3', '-color2-3'):
+            wgt = wn['-img-'].widget
+            pick_color['e'] = ev
+            wgt.bind('<Button-1>', on_click)
+            wgt.configure(cursor='tcross')
+            # loop wait
             continue
         elif ev in ('-color1-2', '-color2-2', '-color3-2'):
             s = getattr(param, ev[1:-2]).ctox().upper()
