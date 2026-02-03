@@ -116,10 +116,8 @@ KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。こ�
 
 samplesの下に各モジュールを使ったサンプル画像を置きました。デフォルトパラメータをいじって保存したものなので、参考まで。
 
-[hexmaze](samples/hexmaze.png)  [hexmaze](samples/stripe.png)  [penrose](samples/scallop.png)
+![stripe](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/stripe.png)![HexMaze](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/hexmaze.png) ![Penrose](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/penrose.png)
 
 画像サンプルとともに、tartanのサンプルセットも置いてあります。セットパターンファイル(*.ttn)は、mod_tartan のセットパターンエディタで読み込んでください。
 
-[tartan.ttn](samples/tartan.png)
-
-
+![tartan samples](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/tartan.png)
