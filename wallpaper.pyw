@@ -324,7 +324,7 @@ def gui_main(modlist: Modules, mods, param: Param,
     wn['-img-'].update(data=image)
 
     def on_click(event):
-        print('onclick')
+        # print('onclick')
         x,y = event.x, event.y
         if 0 <= x < image.width and 0 <= y < image.height:
             pick_color['pos'] = (x,y)
@@ -333,7 +333,7 @@ def gui_main(modlist: Modules, mods, param: Param,
 
     def loop():
         if pick_color['c'] is not None and pick_color['e'] is not None:
-            print('loop', pick_color['e'])
+            # print('loop', pick_color['e'])
             if wn[pick_color['e']].get() == '?':
                 x,y = pick_color['pos']
                 dw,dh = wn['-img-'].size
@@ -390,7 +390,7 @@ def gui_main(modlist: Modules, mods, param: Param,
             else:
                 print("DON'T CLOSE DIALOGUE")
             continue
-        elif ev in ('-color1-3', '-color2-3'):
+        elif ev in ('-color1-3', '-color2-3', '-color3-3'):
             wgt = wn['-img-'].widget
             pick_color['e'] = ev
             wgt.bind('<Button-1>', on_click)
