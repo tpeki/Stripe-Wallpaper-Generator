@@ -12,11 +12,18 @@ CHECKER = 0
 JOINT_WIDTH = 5
 JOINT_BRIGHTNESS = 208
 
+# 内部定数
 GRAD_STR = 0.3  # end_color = color*(1-GRAD_STR)
 NOISE_THICK = 1.8  # 大きいほどnoiseが太目に出る
 NOISE_RATE = 0.4  # 小さいほどnoise線の密度が上がる
 LINTERVAL = 20.0  # テクスチャ(斜線)密度 (d / LINTERVAL) 20.0だとd=60でも可
 PERS = 0.27  # パース強度 0.01～0.3程度
+
+# 目地の粒状感と粒の明るさ
+SAND_GRAIN_SIZE = 0.1  # 砂目率
+INT_BRT = 0.15  # 明るい地の時の減算率
+INT_DRK = 128  # 暗い地の時の加算率
+INT_BDR = 140  # 切替閾値
                                                
 # module基本情報
 def intro(modlist: Modules, module_name):
@@ -65,6 +72,13 @@ def generate(p: Param):
     r = p.pheight  # Tile radius
     joint_width = min(max(1, int(d * p.pdepth / 100)), d-1)
     joint_color = [p.sub_jitter]*3
+    sand_grain_size = SAND_GRAIN_SIZE  # * p.sub_jitter/512
+    if p.sub_jitter > INT_BDR:
+        sand_intensity = 1.0 - INT_BRT
+        sand_int_add = 0
+    else:
+        sand_intensity = 0
+        sand_int_add = ((INT_BDR-p.sub_jitter)/INT_BDR)**2 * INT_DRK
     jitter = p.color_jitter
     color1 = rgb_random_jitter(p.color1, jitter).ctoi()
     color2 = rgb_random_jitter(p.color2, jitter).ctoi()
@@ -80,7 +94,10 @@ def generate(p: Param):
         height = height+margin_h*2
     
     # 1. ベース作成（目地色）
-    img_array = np.full((height, width, 3), joint_color, dtype=np.uint8)
+    img_array = np.full((height, width, 3), joint_color, dtype=np.float32)
+    grain_mask = np.random.rand(height, width) < sand_grain_size
+    img_array[grain_mask] *= sand_intensity
+    img_array[grain_mask] += sand_int_add
     
     tile_size = d - joint_width
     rows = (height + d - 1) // d
@@ -91,11 +108,13 @@ def generate(p: Param):
     color_indices = np.full((rows, cols), -1, dtype=int)
 
     # --- 共通データの事前計算 ---
-    ty, tx = np.meshgrid(np.arange(tile_size), np.arange(tile_size), indexing='ij')
+    ty, tx = np.meshgrid(np.arange(tile_size),
+                         np.arange(tile_size), indexing='ij')
     
     # 角丸マスク
     mask_full = np.ones((tile_size, tile_size), dtype=bool)
-    corners = [(r, r), (r, tile_size-1-r), (tile_size-1-r, r), (tile_size-1-r, tile_size-1-r)]
+    corners = [(r, r), (r, tile_size-1-r), (tile_size-1-r, r),
+               (tile_size-1-r, tile_size-1-r)]
     for cy, cx in corners:
         dist_sq = (ty - cy)**2 + (tx - cx)**2
         if cy == r and cx == r: region = (ty < r) & (tx < r)
@@ -162,11 +181,13 @@ def generate(p: Param):
 
             # マスク適用
             m = mask_full[sy, sx]
-            img_array[dy0:dy1, dx0:dx1][m] = tile_rgb[m].astype(np.uint8)
+            img_array[dy0:dy1, dx0:dx1][m] = tile_rgb[m]  # .astype(np.uint8)
 
     # --- 最後に一括で目地・タイル全体のノイズ処理 ---
-    noise = np.random.normal(0, 2, img_array.shape).astype(np.int16)
-    img_arry = np.clip(img_array.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    #noise = np.random.normal(0, 2, img_array.shape).astype(np.int16)
+    #img_arry = np.clip(img_array.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    noise = np.random.normal(0, 2, img_array.shape)
+    img_arry = np.clip(img_array + noise, 0, 255).astype(np.uint8)
     image = Image.fromarray(img_arry)
 
     if (p.sub_jitter2 & 2) == 2:

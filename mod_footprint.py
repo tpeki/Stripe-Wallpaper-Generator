@@ -30,7 +30,7 @@ JITTER = 30
 
 # module基本情報
 def intro(modlist: Modules, module_name):
-    modlist.add_module(module_name, '足跡',
+    modlist.add_module(module_name, '足跡 (歩数=正:CW 負:CCW)',
                        {'color1':'足跡',
                         'color2':'背景1', 'color3':'背景2',
                         'color_jitter':'歩数',
@@ -211,7 +211,7 @@ def generate_linear(p: Param):
     CANVAS_W, CANVAS_H = p.width, p.height
     W = min(max(p.pdepth,10),int(min(CANVAS_W,CANVAS_H)/4))  # 足跡サイズ
     la = p.sub_jitter % 180  # 傾き角度（度）
-    steps = max(p.color_jitter, 2)  # 足跡の数
+    steps = max(abs(p.color_jitter), 2)  # 足跡の数
     start_x, start_y = p.pwidth, p.pheight
     jitter = JITTER
 
@@ -269,16 +269,25 @@ def generate_arc(p : Param):
     CANVAS_W, CANVAS_H = p.width, p.height
     start_x, start_y = p.pwidth, p.pheight
     start_angle_deg = p.sub_jitter % 360
-    cr = p.sub_jitter2
+    cr_raw = p.sub_jitter2
+    cr = abs(cr_raw)
+    
     W = min(max(p.pdepth,10),int(min(CANVAS_W,CANVAS_H)/4))
-    steps = max(p.color_jitter, 2)
+    steps_raw = p.color_jitter
+    steps = max(abs(steps_raw), 2)
     jitter = JITTER
 
     canvas = vertical_gradient_rgb(CANVAS_W, CANVAS_H,
                                    bg1, bg2).convert('RGBA')
-    
-    phi0 = np.deg2rad(start_angle_deg-180)
-    dphi = W / cr   # 円弧長 ≒ 足跡サイズ
+
+    if steps_raw >= 0:
+        direction = 1
+        phi0 = np.deg2rad(start_angle_deg-180)
+    else:
+        direction = -1
+        phi0 = np.deg2rad(start_angle_deg)
+
+    dphi = W / cr * direction   # 円弧長 ≒ 足跡サイズ
 
     # --- 基準円弧の開始点（中心は 0,0） ---
     ix = cr * np.cos(phi0)
@@ -291,7 +300,7 @@ def generate_arc(p : Param):
         phi = phi0 + i * dphi
 
         # 円周上の点（原点中心）
-        p = np.array([
+        p_vec = np.array([
             cr * np.cos(phi),
             cr * np.sin(phi)
         ]) + off
@@ -299,12 +308,15 @@ def generate_arc(p : Param):
         # 接線方向
         t = np.array([-np.sin(phi), np.cos(phi)])
         la = np.rad2deg(np.arctan2(t[0], -t[1]))
+        if direction == -1:  # 左回りの時は進行方向が逆なので180度足す
+            la += 180
 
         # 左右オフセット（半径方向）
         n = np.array([np.cos(phi), np.sin(phi)])
         side = -1 if i % 2 == 0 else 1
-        pos = p + n * (side * W / 2)
-
+        # 半径が負のとき法線ベクトルが逆を向くのを補正
+        pos = p_vec + n * (side * W / 2) * direction
+        
         if not (0 <= pos[0] <= CANVAS_W and 0 <= pos[1] <= CANVAS_H):
             continue
 
@@ -321,7 +333,7 @@ def generate_arc(p : Param):
 
 def generate(p: Param):
     radius = p.sub_jitter2
-    if radius > 0:
+    if radius != 0:
         img = generate_arc(p)
     else:
         img = generate_linear(p)
