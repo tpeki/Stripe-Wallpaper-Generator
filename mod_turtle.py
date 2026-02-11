@@ -3,6 +3,7 @@ import random
 import TkEasyGUI as sg
 from wall_common import *
 from filedialog import *
+import os.path as pa
 
 # --- 定数設定 ---
 PEN_COLOR = (0x40, 0xff, 0xff)  # ペン色
@@ -129,15 +130,15 @@ def desc(p: Param):
             wn['-t_test-'].update(data=t_img)
         elif ev == '-t_tst-':
             cmds = wn['-t_cmds-'].get_text()
-            if '\n' in cmds:
-                cmds = ''.join(cmds.splitlines())
+            #if '\n' in cmds:
+            #    cmds = ''.join(cmds.splitlines())
             # print(f'CMDS: {cmds}')
             t_img = generate(p, command=cmds)
             wn['-t_test-'].update(data=t_img)
         elif ev == '-t_ok-':
             cmds = wn['-t_cmds-'].get_text()
-            if '\n' in cmds:
-                cmds = ''.join(cmds.splitlines())
+            #if '\n' in cmds:
+            #    cmds = ''.join(cmds.splitlines())
             t_img = generate(p, command=cmds)
             wn['-t_test-'].update(data=t_img)
             tur_preserve['cmd'] = cmds
@@ -178,6 +179,7 @@ def save_tur(fname, cmds):
     fname = get_savefile(fname, filetypes=[('Turtle command','.tur'),] )
     if fname == '':
         return ''
+    default_ext(fname, '.tur')
     with open(fname, mode='w', encoding='shift-jis') as f:
         f.write(cmds)
     return fname
@@ -208,6 +210,7 @@ Q    レジスタ#nの値をスタックに積む
 }    ループ終端
 !    スタック先頭をpopし、0なら一番浅いループを抜ける
 &    デバッグ出力をコンソールに行う
+#    行末までコメントとして読み飛ばす
 '''
 
 DIR = [(0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1)]
@@ -529,6 +532,7 @@ def turtle_draw(draw, turtle, cmds, verbose=False):
     ptr = 0
     while ptr < len(cmds):
         cur = ptr
+        # print(f'{ptr}:{cmds[ptr]} ')
         if '0' <= cmds[cur] <= '9':  # 連続数字は数値としてスタックに積む
             while True:
                 cur += 1
@@ -549,6 +553,12 @@ def turtle_draw(draw, turtle, cmds, verbose=False):
             if verbose:
                 print( f'{ptr}: Command print("{s}")', turtle.show_stack(3))
             ptr = cur+1
+        elif cmds[cur] == '#':  # コメント
+            while True:
+                cur += 1
+                if ord(cmds[cur]) < 0x20:
+                    break
+            ptr = cur
         elif cmds[cur].upper() == 'F':  # Fコマンドだけdrawを渡すので別
             if verbose:
                 print( f'{ptr}: Command "F"', turtle.show_stack(3))

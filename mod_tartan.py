@@ -238,6 +238,7 @@ def load_pattern(fname):
 
 # セットパターンをttnファイルへ保存
 def save_pattern(fname, pat, cset):
+    default_ext(fname, '.ttn')
     with open(fname, mode='w') as f:
         f.write('[Colors]\n')
         for i in range(10):

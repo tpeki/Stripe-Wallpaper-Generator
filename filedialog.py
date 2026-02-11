@@ -43,3 +43,12 @@ def get_savefile(fname, filetypes=''):
     return filename
 
 
+def default_ext(fname, dext):
+    '''set default-ext if ext is blank'''
+    try:
+        body, ext = pa.splitext(fname)
+    except TypeError:
+        return None
+    if ext == '':
+        ext = default_ext
+    return body+ext
