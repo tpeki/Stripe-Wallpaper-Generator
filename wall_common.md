@@ -49,6 +49,9 @@
   - 色指定パラメータをr,g,b の数値にして返す
 - bg_and_font(color: str | RGBColor | tuple[int] ) -> str, str
    - 背景色を受け取り、前景テキスト色と背景色の色指定文字列を返す
+- sat_attenate(image, ratio)
+   - Image.Imageを受け取り、彩度をratio(0～200[%])に構成したimageを返す
+
 
 
 

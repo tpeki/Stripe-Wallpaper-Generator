@@ -191,9 +191,9 @@ def brightness(color: RGBColor, f=1.0, h=0.0, s=1.0, bg=None):
 
 
 def sat_attenate(image, ratio):
-    '''彩度の変更： 0 < ratio(%) < 100 '''
+    '''彩度の変更： 0 < ratio(%) < 200 '''
     enhancer = ImageEnhance.Color(image)
-    return enhancer.enhance(min(1.0, max(0.0, ratio/100.0)))
+    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
 
 def rgb_lerp(c1, c2, t):
     ''' RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)'''
