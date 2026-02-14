@@ -4,7 +4,6 @@ import TkEasyGUI as sg
 from wall_common import *
 
 # --- 定数設定 ---
-DONUTS_ENABLE = 1  # 0:OFF 1: ON
 PATTERN_SIZE = 80
 TRIALS = 70
 DELTA = 20
@@ -58,7 +57,7 @@ menphis_preserv = {
 def intro(modlist: Modules, module_name):
     modlist.add_module(module_name, 'メンフィス (重いがトライ数70ぐらいを推奨)',
                        {'color1':'背景色', 'color2':'背景色2',
-                        'color_jitter':'彩度', 'sub_jitter':'Donuts(1:ON)',
+                        'color_jitter':'彩度',
                         'pwidth':'パターンサイズ', 'pheight':'トライ数',
                         'pdepth':'間隔'})
     return module_name
@@ -72,7 +71,6 @@ def default_param(p: Param):
     p.pwidth = PATTERN_SIZE
     p.pheight = TRIALS
     p.pdepth = DELTA
-    p.sub_jitter = DONUTS_ENABLE
     return p
 
 # ----
@@ -444,8 +442,6 @@ def generate(p: Param):
     # shapesは文字列なので、実際には FN[name]()で呼出し
     if len(menphis_preserv['shapes']) == 0:
         menphis_preserv['shapes'].extend(SHAPES)
-        if p.sub_jitter:
-            menphis_preserv['shapes'].extend(DONUTS)
     shapes = menphis_preserv['shapes']
     shape_num = len(shapes)
     
