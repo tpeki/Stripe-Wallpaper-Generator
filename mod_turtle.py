@@ -110,7 +110,7 @@ def desc(p: Param):
     layout = edit_layout()
 
     wn = sg.Window('Turtle Draw', layout=layout, grab_anywhere=True,
-                   resizable=True)
+                   resizable=True, modal=True)
     
     cmds = tur_preserve['cmd']
     wn['-t_cmds-'].update(text=cmds)

@@ -259,7 +259,8 @@ def strtotuple(s):
 
 
 def desc(p: Param):
-    wn = sg.Window('Tartan-Set Editor', layout=layout(), resizable=True)
+    wn = sg.Window('Tartan-Set Editor', layout=layout(),
+                   resizable=True, modal=True)
 
     # 色セットの読み込み
     cset = copy.copy(BASIC_COLOR)
