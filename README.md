@@ -59,6 +59,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 - hexmap: グラデ六角タイル
 - hexmaze: 森の六角迷路
 - hilbert: ヒルベルト曲線
+- memphis: メンフィス風
 - packingbubble: グラデーション泡
 - peano: ペアノ曲線
 - penrose: ペンローズタイル
@@ -122,4 +123,5 @@ samplesの下に各モジュールを使ったサンプル画像を置きまし�
 画像サンプルとともに、tartanのサンプルセットも置いてあります。セットパターンファイル(*.ttn)は、mod_tartan のセットパターンエディタで読み込んでください。
 
 ![tartan samples](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/tartan.png)
+
 
