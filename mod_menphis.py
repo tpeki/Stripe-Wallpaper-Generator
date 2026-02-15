@@ -5,7 +5,7 @@ from wall_common import *
 
 # --- 定数設定 ---
 PATTERN_SIZE = 80
-TRIALS = 70
+TRIALS = 50
 DELTA = 20
 BGCOLOR1 = (1,1,0x99)
 BGCOLOR2 = (1,1,1)
@@ -28,24 +28,27 @@ Choco = [(246,230,119),  # plain
          (248,244,231),  # White
          ]
 
-SHAPES = [('triangle_solid', 'triangle_hollow'),
-          ('triangle_hollow', 'triangle_hollow'),
-          ('square_solid', 'square_hollow'),
-          ('square_hollow', 'square_hollow'),
-          ('circle_solid', 'circle_hollow'),
-          ('circle_solid', 'circle_lattice'),
-          ('circle_hollow', 'circle_hollow'),
-          ('square_dot', None),
-          ('chevron_line', None),
-          ]
+SHAPES = [
+    ('triangle_solid', 'triangle_hollow'),
+    ('triangle_hollow', 'triangle_hollow'),
+    ('square_solid', 'square_hollow'),
+    ('square_hollow', 'square_hollow'),
+    ('circle_solid', 'circle_hollow'),
+    ('circle_solid', 'circle_lattice'),
+    ('circle_hollow', 'circle_hollow'),
+    ('square_dot', None),
+    ('chevron_line', None),
+    ]
 
-DONUTS = [('pon_de_ring', None),
-          ('donuts', None),
-          ]
-
-APPENDS = [('crown_solid', 'crown_hollow'),
-           ('medal', None),
-           ]
+APPENDS = [
+    ('pon_de_ring', None),
+    ('donuts', None),
+    ('fish', None),
+    ('crown_solid', 'crown_hollow'),
+    ('medal', None),
+    ('cross', None),
+    ('arc', None),
+    ]
 
 FN = {}
 
@@ -138,6 +141,40 @@ def circle_hollow(size: int, color: tuple):
 
     md.circle((r,r), r-LINE_WIDTH, fill=0, outline=color, width=LINE_WIDTH)
     return mask
+
+@register
+def cross(size: int, color: tuple):
+    size = int(size*0.3)
+    r = LINE_WIDTH*2
+    image = Image.new('RGBA', (size, size), 0)
+    md = ImageDraw.Draw(image)
+
+    md.line([(r,r),(size-r,size-r)], fill=color, width=r*2)
+    md.line([(r,size-r),(size-r,r)], fill=color, width=r*2)
+    md.circle((r,r), r, fill=color)
+    md.circle((r,size-r), r, fill=color)
+    md.circle((size-r,r), r, fill=color)
+    md.circle((size-r,size-r), r, fill=color)
+
+    return image
+
+@register
+def arc(size: int, color: tuple):
+    size = int(size*0.8)
+    r = size / 2
+    pr = LINE_WIDTH*4
+    sa,ea = 10,50
+    image = Image.new('RGBA', (size, size), 0)
+    md = ImageDraw.Draw(image)
+    cs,ss = np.cos(np.deg2rad(sa)), np.sin(np.deg2rad(sa))
+    ce,se = np.cos(np.deg2rad(ea)), np.sin(np.deg2rad(ea))
+
+    md.arc([(-size+pr,-size+pr),(size-pr,size-pr)], sa, ea,
+           fill=color, width=pr*2)
+    md.circle((cs*(r-pr)*2,ss*(r-pr)*2), pr, fill=color)
+    md.circle((ce*(r-pr)*2,se*(r-pr)*2), pr, fill=color)
+
+    return image
 
 @register
 def square_dot(size: int, color: tuple):
@@ -307,39 +344,109 @@ def medal(size: int, color: tuple):
     md.polygon([(size-x1,y1),(size-x2,y3),(size-x3,y3),
                 (size-x3,y4),(size-x4,y2)], fill=color)
     return image
-    
+
+@register
+def fish(size: int, color: tuple):
+    size = min(size, 500)
+    t_color = (color[0], color[1], color[2], 0)
+    color = (color[0], color[1], color[2], 0xff)
+    # 元画像
+    im = Image.new('RGBA', (500,500), t_color)
+    dr = ImageDraw.Draw(im)
+
+    dr.circle((200,220),155,fill=color)
+    dr.polygon([(160,120),(280,50),(332,138),(160,120)],fill=color)
+    dr.polygon([(244,264),(450,190),(380,420),(244,264)],fill=color)
+    dr.polygon([(200,370),(260,400),(310,330),(200,370)],fill=color)
+    dr.polygon([(50,265),(90,260),(60,290),(50,265)],fill=(0,0,0,0))
+
+    # --- NumPy 版 角丸処理（Closing: dilation → erosion） ---
+    alpha = np.array(im.split()[3]) > 0
+    alpha = alpha.astype(np.uint8)
+
+    r = 2
+    kernel = circular_kernel(r)
+
+    # dilation → erosion
+    dil = npdilate(alpha, kernel)
+    ero = nperode(dil, kernel)
+
+    rounded = (ero * 255).astype(np.uint8)
+    im.putalpha(Image.fromarray(rounded))
+
+    # 目と口を後から抜く
+    dr.polygon([(50,265),(90,260),(60,290),(50,265)],fill=(0,0,0,0))
+    dr.circle((140,150),32,fill=(0,0,0,0))
+
+    # 縮小して返す
+    im.thumbnail((size, size), Image.LANCZOS)
+    return im
+
+
+# --- 描画サポート: dilation / erosion ---
+def circular_kernel(r):
+    y, x = np.ogrid[-r:r+1, -r:r+1]
+    return (x*x + y*y <= r*r).astype(np.uint8)
+
+def npdilate(mask, kernel):
+    kh, kw = kernel.shape
+    r_y, r_x = kh//2, kw//2
+    H, W = mask.shape
+    out = np.zeros_like(mask)
+
+    for dy in range(-r_y, r_y+1):
+        for dx in range(-r_x, r_x+1):
+            if kernel[dy+r_y, dx+r_x] == 0:
+                continue
+            y1 = max(0, dy)
+            y2 = min(H, H+dy)
+            x1 = max(0, dx)
+            x2 = min(W, W+dx)
+            out[y1:y2, x1:x2] |= mask[y1-dy:y2-dy, x1-dx:x2-dx]
+    return out
+
+def nperode(mask, kernel):
+    kh, kw = kernel.shape
+    r_y, r_x = kh//2, kw//2
+    H, W = mask.shape
+    out = np.ones_like(mask)
+
+    for dy in range(-r_y, r_y+1):
+        for dx in range(-r_x, r_x+1):
+            if kernel[dy+r_y, dx+r_x] == 0:
+                continue
+            y1 = max(0, dy)
+            y2 = min(H, H+dy)
+            x1 = max(0, dx)
+            x2 = min(W, W+dx)
+            out[y1:y2, x1:x2] &= mask[y1-dy:y2-dy, x1-dx:x2-dx]
+    return out
+
 # ----
 # スイッチ
 # ----
 def desc(p: Param):
     current = menphis_preserv['shapes']
-    # SHAPES:Standard, DONUTS:Donuts, APPENDS:Others
+    apd_num = len(APPENDS)
+    # SHAPES:Standard, APPENDS:Others
     cur_shapes = True if SHAPES[0] in current else False
-    cur_donuts = True if DONUTS[0] in current else False
-    cur_appends = True if APPENDS[0] in current else False
+    cur_apds = []
+    for i in range(apd_num):
+        cur_apds.append(True if APPENDS[i] in current else False)
 
-    shape_list = ''
     sl_w = 0
     sl_h = min(max(len(SHAPES),3),10)
+    shape_list = ''
     for x in SHAPES:
         item = f'({x[0]}, {x[1]})\n'
         sl_w = len(item) if sl_w < len(item) else sl_w
         shape_list = shape_list + item
-    donuts_list = ''
-    dl_w = 0
-    dl_h = min(max(len(DONUTS),3),10)
-    for x in DONUTS:
-        item = f'({x[0]}, {x[1]})\n'
-        dl_w = len(item) if dl_w < len(item) else dl_w
-        donuts_list = donuts_list + item
-    appends_list = ''
+
     al_w = 0
-    al_h = min(max(len(APPENDS),3),10)
-    for x in APPENDS:
-        item = f'({x[0]}, {x[1]})\n'
-        al_w = len(item) if al_w < len(item) else al_w
-        appends_list = appends_list + item
-    list_w = max(sl_w, dl_w, al_w)
+    for i in range(apd_num):
+        item = f'({APPENDS[i][0]}, {APPENDS[i][1]})'
+        al_w = len(item)+2 if al_w < len(item) else al_w
+    list_w = max(sl_w, al_w)
 
     sha_lo = [[sg.Column(
         layout=[[sg.Checkbox('Standard shapes', default=cur_shapes,
@@ -348,25 +455,43 @@ def desc(p: Param):
                sg.Multiline(shape_list, text_align='right', expand_x=True,
                         size=(list_w,sl_h))],
               ]
-    don_lo = [[sg.Column(
-        layout=[[sg.Checkbox('Donuts', default=cur_donuts,
-                             key='-don-', group_id='shape')],
-                [sg.Text('', expand_y=True, size=(16,1))]]),
-               sg.Multiline(donuts_list, text_align='right', expand_x=True,
-                        size=(list_w,dl_h))],
-              ]
-    apd_lo = [[sg.Column(
-        layout=[[sg.Checkbox('Append shapes', default=cur_appends,
-                             key='-apd-', group_id='shape')],
-                [sg.Text('', expand_y=True, size=(16,1))]]),
-               sg.Multiline(appends_list, text_align='right', expand_x=True,
-                        size=(list_w,al_h))],
-              ]
-    
-    
 
+    al_h = max(len(APPENDS),3)
+    if al_w*2 < list_w or apd_num >= 5:
+        fold = True
+        al_w = max(al_w, list_w // 2)
+        al_h = max(int(len(APPENDS)/2+0.5),3)
+    else:
+        fold = False
+        
+    appends_items = []
+    for i in range(apd_num):
+        item = f'({APPENDS[i][0]}, {APPENDS[i][1]})'
+        appends_items.append(sg.Checkbox(item, cur_apds[i], group_id='shape',
+                                         key=f'-apd{i:02d}-'))
+
+    apd_lo = [[sg.Text('Append shapes', expand_x=True)]]
+    if fold:
+        left = []
+        right = []
+        lines = int(apd_num/2+0.5)
+        for i in range(lines):        
+            left.append([appends_items[i]])
+            if i+lines >= apd_num:
+                right.append([sg.Text('',expand_x=True)])
+                print(APPENDS[i])
+                break
+            right.append([appends_items[i+lines]])
+
+            print(APPENDS[i],APPENDS[i+lines])
+
+        apd_lo.append([sg.Column(layout=left),
+                       sg.Column(layout=right)])
+    else:        
+        for x in appends_items:
+            apd_lo.append([x])
+    
     lo = [[sg.Frame('', layout=sha_lo, relief='groove')],
-          [sg.Frame('', layout=don_lo, relief='groove')],
           [sg.Frame('', layout=apd_lo, relief='groove')],
           [sg.Text('', key='-msg-', expand_x=True),
            sg.Button('Cancel', key='-can-'),
@@ -395,13 +520,16 @@ def desc(p: Param):
     new_shapes = []
     if '-sha-' in result:
         new_shapes.extend(SHAPES)
-    if '-don-' in result:
-        new_shapes.extend(DONUTS)
-    if '-apd-' in result:
-        new_shapes.extend(APPENDS)
+    for i in range(apd_num):
+        if f'-apd{i:02d}-' in result:
+            new_shapes.append(APPENDS[i])
 
+    if current == new_shapes:
+        return
+    
     menphis_preserv['shapes'] = new_shapes
-    return
+    print(menphis_preserv['shapes'])
+    return generate(p)
 
 
 # ----
