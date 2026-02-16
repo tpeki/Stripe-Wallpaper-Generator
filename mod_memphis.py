@@ -45,6 +45,7 @@ APPENDS = [
     ('pon_de_ring', None),
     ('donuts', None),
     ('fish', None),
+    ('takoyaki', None),
     ('crown_solid', 'crown_hollow'),
     ('medal', None),
     ('dot', None),
@@ -62,7 +63,7 @@ memphis_preserv = {
 
 # module基本情報
 def intro(modlist: Modules, module_name):
-    modlist.add_module(module_name, 'メンフィス (重いがトライ数70ぐらいを推奨)',
+    modlist.add_module(module_name, 'メンフィス (サイズ×トライ数=320程度を推奨)',
                        {'color1':'背景色', 'color2':'背景色2',
                         'color_jitter':'彩度',
                         'pwidth':'パターンサイズ', 'pheight':'トライ数',
@@ -435,6 +436,29 @@ def fish(size: int, color: tuple):
     im.thumbnail((size, size), Image.LANCZOS)
     return im
 
+@register
+def takoyaki(size: int, color: tuple):
+    size = min(size, 500)
+    im = Image.new('RGBA',(520, 520),0)
+    md = ImageDraw.Draw(im)
+
+    md.ellipse([(0,120),(460,520)],fill=Choco[0])
+    md.polygon([(480,0),(380,160),(396,180),(500,28),(480,0)],fill=color)
+    points = [(30,256)]
+    for x in range(5):
+        dy = 2-abs(x-2)
+        points.append((x*80+80,170-dy*20))
+        points.append((x*80+60,320))
+    points.append((445,260))
+    md.line(points, fill=Choco[1], width=50, joint='curve')
+    for x in range(13):
+        md.rectangle(((x*28+40, 240-(x%2)*80),(x*28+60, 260-(x%2)*80)),
+                     fill=Choco[3])
+
+    # 縮小して返す
+    im.thumbnail((size, size), Image.LANCZOS)
+    return im
+
 
 # --- 描画サポート: dilation / erosion ---
 def circular_kernel(r):
@@ -683,8 +707,8 @@ def generate(p: Param):
                 break
             
             px, py = candidate_points.pop()
-            px += int(rmap[x][1]*delta*2 - delta)
-            py += int(rmap[x][2]*delta*2 - delta)
+            px += int(rmap[x][1]*delta*6 - delta*3)
+            py += int(rmap[x][2]*delta*6 - delta*3)
 
             s = int(rmap[x][0]*pat_diff+pat_size_min)
             pa = rmap[x][3] * np.pi * 2
@@ -730,13 +754,21 @@ def generate(p: Param):
                 continue
             if y10 < 0 or x10 < 0 or y11 > h or x11 > w:
                 continue
-            if np.any(occ[y10:y11, x10:x11] & alpha1_d):
+            try:
+                if np.any(occ[y10:y11, x10:x11] & alpha1_d):
+                    continue
+            except ValueError:
+                # Broadcast Error -> ignore
                 continue
             
             if ps[1] is not None:
                 if y20 < 0 or x20 < 0 or y21 > h or x21 > w:
                     continue
-                if np.any(occ[y20:y21, x20:x21] & alpha2_d):
+                try:
+                    if np.any(occ[y20:y21, x20:x21] & alpha2_d):
+                        continue
+                except ValueError:
+                    # Broadcast Error -> ignore
                     continue
             # 配置成功
             break
@@ -747,11 +779,19 @@ def generate(p: Param):
             
             # print('retry=', et)
             base.paste(pat1, (p1x,p1y), pat1)
-            occ[y10:y11, x10:x11] |= alpha1_d
+            try:
+                occ[y10:y11, x10:x11] |= alpha1_d
+            except ValueError:
+                # Broadcast Error -> ignore
+                pass
 
             if ps[1] is not None:
                 base.paste(pat2, (p2x,p2y), pat2)
-                occ[y20:y21, x20:x21] |= alpha2_d
+                try:
+                    occ[y20:y21, x20:x21] |= alpha2_d
+                except ValueError:
+                    # Broadcast Error -> ignore
+                    pass
 
             placed = True            
             placed_count += 1
