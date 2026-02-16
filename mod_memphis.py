@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from PIL import Image, ImageDraw
 import TkEasyGUI as sg
@@ -605,6 +606,20 @@ def dilate(mask: np.ndarray, delta: int):
 
 
 def generate(p: Param):
+    def get_grid_pos(x, y):
+        return x // delta, y // delta
+
+    def is_nearby_collision(x, y, radius=DELTA*AA):
+        gx, gy = get_grid_pos(x, y)
+        for ix in range(max(0, gx -1), min(grid_w,gx+2)):
+            for iy in range(max(0, gy-1), min(grid_h, gy+2)):
+                for (cx, cy) in grid_cells[ix][iy]:
+                    dx = cx - x
+                    dy = cy - y
+                    if dx*dx + dy*dy < radius*radius:
+                        return True
+        return False
+
     ow, oh = p.width, p.height
     w, h = int(ow*1.2)*AA, int(oh*1.2)*AA
     pat_size_min = p.pwidth*AA
@@ -625,28 +640,53 @@ def generate(p: Param):
     shape_num = len(shapes)
     
     base = Image.new('RGBA', (w,h), color=0)
-    occ = np.zeros((h, w), dtype=bool)  # 占有マップ
+
+    # 占有マップ(grid)
+    grid_w = (w+delta-1) // delta
+    grid_h = (h+delta-1) // delta
+    grid_cells = [[[] for _ in range(grid_h)] for _ in range(grid_w)]
+
+    occ = np.zeros((h, w), dtype=bool)  # 占有マップ(bitmap)
 
     rng = np.random.default_rng()
     rmap = rng.random((num,8))
     pat_diff = pat_size_max-pat_size_min
 
-    # print('Retry Max=',retry_count)
-    waste = 0
+    # 配置グリッドの生成
+    step = int(pat_size_max + delta*2)
+    candidate_points = []
+    for gx in range(0, w, step):
+        for gy in range(0, h, step):
+            cx = gx + step//2
+            cy = gy + step//2
+            if cx < w and cy < h:
+                candidate_points.append((cx,cy))
+                
+    np.random.shuffle(candidate_points)
 
+    #score_threshold = (step*2)**2 * 0.3  # 例：周辺領域の30%空きならOK
+    #no_place_count = 0
+    #max_no_place = 50  # 閾値を下げるまでの連続失敗回数など
+
+    placed_count = 0
+    waste = 0
+    print('candidate_points:',len(candidate_points))
+    # print('Retry Max=',retry_count)
+    
     for x in range(num):
         if (x%10) == 0:
             print(f'{int((num-x)/10)} ', end='')
+        placed = False
         
-        et = 0
-        while True:
-            et += 1
-            if et > retry_count:
+        for attempt in range(retry_count):
+            if len(candidate_points) == 0:
                 break
             
+            px, py = candidate_points.pop()
+            px += int(rmap[x][1]*delta*2 - delta)
+            py += int(rmap[x][2]*delta*2 - delta)
+
             s = int(rmap[x][0]*pat_diff+pat_size_min)
-            px = int(rmap[x][1] * w)
-            py = int(rmap[x][2] * h)
             pa = rmap[x][3] * np.pi * 2
             ps = shapes[int(rmap[x][4]*shape_num)]
             sc = rmap[x][5]*0.3+0.7
@@ -686,6 +726,8 @@ def generate(p: Param):
                 pat2 = None
 
 
+            if is_nearby_collision(px,py):
+                continue
             if y10 < 0 or x10 < 0 or y11 > h or x11 > w:
                 continue
             if np.any(occ[y10:y11, x10:x11] & alpha1_d):
@@ -696,22 +738,30 @@ def generate(p: Param):
                     continue
                 if np.any(occ[y20:y21, x20:x21] & alpha2_d):
                     continue
-
+            # 配置成功
             break
         
-        if et <= retry_count:
+        if attempt <= retry_count:
+            grid_x, grid_y = get_grid_pos(px, py)
+            grid_cells[grid_x][grid_y].append((px, py))
+            
             # print('retry=', et)
             base.paste(pat1, (p1x,p1y), pat1)
             occ[y10:y11, x10:x11] |= alpha1_d
 
-            if pat2 is not None:
+            if ps[1] is not None:
                 base.paste(pat2, (p2x,p2y), pat2)
                 occ[y20:y21, x20:x21] |= alpha2_d
+
+            placed = True            
+            placed_count += 1
         else:
             waste += 1
-            # print('wasted.')
+        
+        if len(candidate_points) == 0:
+            break
 
-    print('')
+    print(f'\nPlaced {placed_count}, Waste {waste}')
     base = base.resize((w//AA, h//AA), resample=Image.LANCZOS)
     ofsx, ofsy = int((w/AA-ow)/2), int((h/AA-oh)/2)
     base = base.crop((ofsx,ofsy,ow+ofsx, oh+ofsy))
