@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from PIL import Image, ImageDraw
 import TkEasyGUI as sg
 from wall_common import *
@@ -110,9 +111,10 @@ def triangle_hollow(size: int, color: tuple):
     obj_h = min(size * np.sin(np.deg2rad(60)), size)
     dx = size * 0.5
     dy = obj_h
+    lw = max(2, int(size/32))*AA
 
     md.polygon((0,dy, dx,0, size,dy), fill=0, outline=color,
-               width=LINE_WIDTH)
+               width=lw)
     return mask
 
 @register
@@ -124,9 +126,10 @@ def square_solid(size: int, color: tuple):
 def square_hollow(size: int, color: tuple):
     mask = Image.new('RGBA', (size,size), 0)
     md = ImageDraw.Draw(mask)
+    lw = max(2, int(size/32))*AA
 
-    md.rectangle((LINE_WIDTH, LINE_WIDTH, size-LINE_WIDTH, size-LINE_WIDTH),
-                 fill=0, outline=color, width=LINE_WIDTH)
+    md.rectangle((lw, lw, size-lw, size-lw),
+                 fill=0, outline=color, width=lw)
     return mask
 
 @register
@@ -143,14 +146,15 @@ def circle_hollow(size: int, color: tuple):
     r = size // 2
     mask = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(mask)
+    lw = max(2, int(size/32))*AA
 
-    md.circle((r,r), r-LINE_WIDTH, fill=0, outline=color, width=LINE_WIDTH)
+    md.circle((r,r), r-lw, fill=0, outline=color, width=lw)
     return mask
 
 @register
 def cross(size: int, color: tuple):
     size = int(size*0.3)
-    r = LINE_WIDTH*2
+    r = max(2, int(size/32))*AA*2
     image = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(image)
 
@@ -165,10 +169,10 @@ def cross(size: int, color: tuple):
 
 @register
 def arc(size: int, color: tuple):
-    size = int(size*0.8)
+    size = int(size*0.9)
     r = size / 2
-    pr = LINE_WIDTH*4
-    sa,ea = 10,50
+    pr = int(r)//4
+    sa,ea = 10,65
     image = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(image)
     cs,ss = np.cos(np.deg2rad(sa)), np.sin(np.deg2rad(sa))
@@ -183,8 +187,8 @@ def arc(size: int, color: tuple):
 
 @register
 def dot(size: int, color: tuple):
-    size = LINE_WIDTH * 6
-    r = LINE_WIDTH*3
+    r = max(2, int(size/32))*AA*3
+    size = r*2
     image = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(image)
     md.circle((r,r), r, fill=color)
@@ -193,8 +197,9 @@ def dot(size: int, color: tuple):
 
 @register
 def dot2(size: int, color: tuple):
-    size = LINE_WIDTH * 8
-    r = LINE_WIDTH*3
+    r = max(2, int(size/32))*AA*3
+    pr = max(2, int(size/32))*AA*2
+    size = r*3
     image = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(image)
     color1 = np.random.randint(0,len(COLORS))
@@ -202,7 +207,7 @@ def dot2(size: int, color: tuple):
     if color1 == color2:
         color2 = (color1 + 2) % len(COLORS)
     
-    md.circle((r+LINE_WIDTH*2,r+LINE_WIDTH*2), r, fill=COLORS[color2])
+    md.circle((r+pr,r+pr), r, fill=COLORS[color2])
     md.circle((r,r), r, fill=COLORS[color1])
 
     return image
@@ -256,6 +261,7 @@ def circle_lattice(size: int, color: tuple):
     r = size // 2
     line_count = 8
     space = int(size/line_count)
+    lw = max(2, int(size/32))*AA
 
     mask = Image.new('L', (size, size), 0)
     md = ImageDraw.Draw(mask)
@@ -266,8 +272,8 @@ def circle_lattice(size: int, color: tuple):
     
     for x in range(line_count):
         xx = x*space+space//2
-        md.line([(0, xx),(size,xx)], fill=color, width=LINE_WIDTH)
-        md.line([(xx, 0),(xx, size)], fill=color, width=LINE_WIDTH)
+        md.line([(0, xx),(size,xx)], fill=color, width=lw)
+        md.line([(xx, 0),(xx, size)], fill=color, width=lw)
 
     image = Image.new('RGBA', (size, size), 0)
     image.paste(ci, (0,0), mask)
@@ -277,13 +283,13 @@ def circle_lattice(size: int, color: tuple):
 
 @register
 def chevron_line(size: int, color: tuple):
-    pat_w = int(size*1.5)
     peaks = 4
-    band_width = max(size//40,2)*AA
-    space = int((size-band_width)/(peaks+1)/2)
+    pat_w = int(size*peaks/2)
+    band_width = max(pat_w//40, 2)*AA
     r = band_width // 2
+    space = int((pat_w-band_width)/(peaks+1)/2)
     
-    image = Image.new('RGBA', (size,size), 0)
+    image = Image.new('RGBA', (pat_w,(space+band_width+r)*2), 0)
     md = ImageDraw.Draw(image)
 
     line_coords = []
@@ -373,12 +379,13 @@ def crown_hollow(size: int, color: tuple):
     x1 = size * 0.25
     x2 = size * 0.5
     x3 = size * 0.75
+    lw = max(2, int(size/32))*AA
 
     image = Image.new('RGBA', (size,size), 0)
     md = ImageDraw.Draw(image)
-    md.polygon([(LINE_WIDTH,y1),(x1,y2),(x2,y1),(x3,y2),(size-LINE_WIDTH,y1),
-                (size-LINE_WIDTH,y3),(LINE_WIDTH,y3),(LINE_WIDTH,y1)],
-               outline=color, width=LINE_WIDTH)
+    md.polygon([(lw,y1),(x1,y2),(x2,y1),(x3,y2),(size-lw,y1),
+                (size-lw,y3),(lw,y3),(lw,y1)],
+               outline=color, width=lw)
 
     return image
 
@@ -629,29 +636,27 @@ def dilate(mask: np.ndarray, delta: int):
     return out
 
 
+def slidewin(matrix, radius):
+    # 元配列の周囲に0で埋めた領域を足して配列の端で破綻しないようにする
+    P = np.pad(matrix, pad_width=radius//2, mode='constant', constant_values=0)
+    # スライディングウィンドウで近傍をくくる
+    win = sliding_window_view(P, (radius,radius))
+    # winは、Pの各セルに対応する [r,r] の配列の配列 [w,h,r,r] 
+    # 各r,r のsumを取る → [w,h] の配列になる
+    S = win.sum(axis=(2,3))
+
+    return S
+
 def generate(p: Param):
-    def get_grid_pos(x, y):
-        return x // delta, y // delta
-
-    def is_nearby_collision(x, y, radius=DELTA*AA):
-        gx, gy = get_grid_pos(x, y)
-        for ix in range(max(0, gx -1), min(grid_w,gx+2)):
-            for iy in range(max(0, gy-1), min(grid_h, gy+2)):
-                for (cx, cy) in grid_cells[ix][iy]:
-                    dx = cx - x
-                    dy = cy - y
-                    if dx*dx + dy*dy < radius*radius:
-                        return True
-        return False
-
     ow, oh = p.width, p.height
-    w, h = int(ow*1.2)*AA, int(oh*1.2)*AA
     pat_size_min = p.pwidth*AA
     pat_size_max = int(pat_size_min * 1.3)
     shift = pat_size_min // 3
     delta = p.pdepth*AA
     num = p.pheight
     tint = p.color_jitter
+    w, h = int(ow+p.pwidth*1.3+p.pdepth*3)*AA,\
+           int(oh+p.pwidth*1.3+p.pdepth*3)*AA
     
     retry_count = ABANDON
     colors = COLORS
@@ -666,142 +671,126 @@ def generate(p: Param):
     base = Image.new('RGBA', (w,h), color=0)
 
     # 占有マップ(grid)
-    grid_w = (w+delta-1) // delta
-    grid_h = (h+delta-1) // delta
-    grid_cells = [[[] for _ in range(grid_h)] for _ in range(grid_w)]
+    grid_w = w // (pat_size_min + delta)
+    grid_h = h // (pat_size_min + delta)
 
     occ = np.zeros((h, w), dtype=bool)  # 占有マップ(bitmap)
+    gocc = np.zeros((grid_w,grid_h),dtype=bool)
 
     rng = np.random.default_rng()
     rmap = rng.random((num,8))
     pat_diff = pat_size_max-pat_size_min
-
-    # 配置グリッドの生成
-    step = int(pat_size_max + delta*2)
-    candidate_points = []
-    for gx in range(0, w, step):
-        for gy in range(0, h, step):
-            cx = gx + step//2
-            cy = gy + step//2
-            if cx < w and cy < h:
-                candidate_points.append((cx,cy))
-                
-    np.random.shuffle(candidate_points)
-
-    #score_threshold = (step*2)**2 * 0.3  # 例：周辺領域の30%空きならOK
-    #no_place_count = 0
-    #max_no_place = 50  # 閾値を下げるまでの連続失敗回数など
-
-    placed_count = 0
-    waste = 0
-    print('candidate_points:',len(candidate_points))
-    # print('Retry Max=',retry_count)
     
     for x in range(num):
         if (x%10) == 0:
             print(f'{int((num-x)/10)} ', end='')
-        placed = False
         
-        for attempt in range(retry_count):
-            if len(candidate_points) == 0:
-                break
-            
-            px, py = candidate_points.pop()
-            px += int(rmap[x][1]*delta*6 - delta*3)
-            py += int(rmap[x][2]*delta*6 - delta*3)
+        S = slidewin(gocc, 5)
+        mask = (gocc == 0)
+        if not mask.any():
+            print('\nAll cells are occupied.  ', end='')
+            break
 
-            s = int(rmap[x][0]*pat_diff+pat_size_min)
-            pa = rmap[x][3] * np.pi * 2
-            ps = shapes[int(rmap[x][4]*shape_num)]
-            sc = rmap[x][5]*0.3+0.7
-            pc = int(rmap[x][6]*color_num)
-            pc2 = (pc+int(rmap[x][7]*color_num)) % color_num
-            if pc2 == pc:
-                pc2 = (pc2+1) % color_num
+        # 重み付け配置
+        weights = np.zeros_like(S, dtype=float)
+        weights[mask] = 1/(S[mask] + 1)+0.1
+        prob = weights/weights.sum()
 
-            offset = np.array([0, shift])  # ローカル座標
-            R = np.array([[np.cos(pa), -np.sin(pa)],
-                          [np.sin(pa), np.cos(pa)]])
-            ox, oy = R @ offset
+        # 偏差配置
+        #mean = S[mask].mean()
+        #std = S[mask].std()
+        #if std == 0:
+        #    T = np.full_like(S, 50, dtype=float)
+        #else:
+        #    T = np.zeros_like(S, dtype=float)
+        #    T[mask] = 50 + 10*(S[mask]-mean)/std
+        #    
+        #prob = (T.max() - T) + 1
+        #prob[~mask] = 0
+        #prob = prob/prob.sum()
 
-            pat1 = FN[ps[0]](int(s*sc), colors[pc])
-            pat1 = pat1.rotate(np.rad2deg(pa), expand=True)
-            p1w, p1h = pat1.size
-            p1x = px - p1w//2
-            p1y = py - p1h//2
-            alpha1 = np.array(pat1.split()[3]) > 0
-            alpha1_d = dilate(alpha1, delta)  # 占有範囲
+        prob_flat = prob.ravel()
+        idx_flat = np.random.choice(len(prob_flat), p=prob_flat)
+        px, py = divmod(idx_flat,grid_h)
+        gocc[px, py] = 1
 
-            y10,y11 = p1y, p1y+p1h
-            x10, x11 = p1x, p1x+p1w
+        px = px*(pat_size_min+delta) + int(rmap[x][1]*delta*3 - delta*1.5)
+        py = py*(pat_size_min+delta) + int(rmap[x][2]*delta*3 - delta*1.5)
 
-            if ps[1] is not None:
-                pat2 = FN[ps[1]](s, colors[pc2])
-                pat2 = pat2.rotate(np.rad2deg(pa), expand=True)
-                p2w, p2h = pat2.size
-                p2x = int(px+ox - p2w/2)
-                p2y = int(py+oy - p2h/2)
-                alpha2 = np.array(pat2.split()[3]) > 0
-                alpha2_d = dilate(alpha2, delta)  # 占有範囲
+        s = int(rmap[x][0]*pat_diff+pat_size_min)
+        pa = rmap[x][3] * np.pi * 2
+        ps = shapes[int(rmap[x][4]*shape_num)]
+        sc = rmap[x][5]*0.3+0.7
+        pc = int(rmap[x][6]*color_num)
+        pc2 = (pc+int(rmap[x][7]*color_num)) % color_num
+        if pc2 == pc:
+            pc2 = (pc2+1) % color_num
 
-                y20, y21 = p2y, p2y+p2h
-                x20, x21 = p2x, p2x+p2w
-            else:
-                pat2 = None
+        offset = np.array([0, shift])  # ローカル座標
+        R = np.array([[np.cos(pa), -np.sin(pa)],
+                      [np.sin(pa), np.cos(pa)]])
+        ox, oy = R @ offset
 
+        pat1 = FN[ps[0]](int(s*sc), colors[pc])
+        pat1 = pat1.rotate(np.rad2deg(pa), expand=True)
+        p1w, p1h = pat1.size
+        p1x = px - p1w//2
+        p1y = py - p1h//2
+        alpha1 = np.array(pat1.split()[3]) > 0
+        alpha1_d = dilate(alpha1, delta)  # 占有範囲
 
-            if is_nearby_collision(px,py):
+        y10,y11 = p1y, p1y+p1h
+        x10, x11 = p1x, p1x+p1w
+
+        if ps[1] is not None:
+            pat2 = FN[ps[1]](s, colors[pc2])
+            pat2 = pat2.rotate(np.rad2deg(pa), expand=True)
+            p2w, p2h = pat2.size
+            p2x = int(px+ox - p2w/2)
+            p2y = int(py+oy - p2h/2)
+            alpha2 = np.array(pat2.split()[3]) > 0
+            alpha2_d = dilate(alpha2, delta)  # 占有範囲
+
+            y20, y21 = p2y, p2y+p2h
+            x20, x21 = p2x, p2x+p2w
+        else:
+            pat2 = None
+
+        if y10 < 0 or x10 < 0 or y11 > h or x11 > w:
+            continue
+        try:
+            if np.any(occ[y10:y11, x10:x11] & alpha1_d):
                 continue
-            if y10 < 0 or x10 < 0 or y11 > h or x11 > w:
+        except ValueError:
+            # Broadcast Error -> ignore
+            continue
+        
+        if ps[1] is not None:
+            if y20 < 0 or x20 < 0 or y21 > h or x21 > w:
                 continue
             try:
-                if np.any(occ[y10:y11, x10:x11] & alpha1_d):
+                if np.any(occ[y20:y21, x20:x21] & alpha2_d):
                     continue
             except ValueError:
                 # Broadcast Error -> ignore
                 continue
-            
-            if ps[1] is not None:
-                if y20 < 0 or x20 < 0 or y21 > h or x21 > w:
-                    continue
-                try:
-                    if np.any(occ[y20:y21, x20:x21] & alpha2_d):
-                        continue
-                except ValueError:
-                    # Broadcast Error -> ignore
-                    continue
-            # 配置成功
-            break
-        
-        if attempt <= retry_count:
-            grid_x, grid_y = get_grid_pos(px, py)
-            grid_cells[grid_x][grid_y].append((px, py))
-            
-            # print('retry=', et)
-            base.paste(pat1, (p1x,p1y), pat1)
+                
+        base.paste(pat1, (p1x,p1y), pat1)
+        try:
+            occ[y10:y11, x10:x11] |= alpha1_d
+        except ValueError:
+            # Broadcast Error -> ignore
+            pass
+
+        if ps[1] is not None:
+            base.paste(pat2, (p2x,p2y), pat2)
             try:
-                occ[y10:y11, x10:x11] |= alpha1_d
+                occ[y20:y21, x20:x21] |= alpha2_d
             except ValueError:
                 # Broadcast Error -> ignore
                 pass
 
-            if ps[1] is not None:
-                base.paste(pat2, (p2x,p2y), pat2)
-                try:
-                    occ[y20:y21, x20:x21] |= alpha2_d
-                except ValueError:
-                    # Broadcast Error -> ignore
-                    pass
-
-            placed = True            
-            placed_count += 1
-        else:
-            waste += 1
-        
-        if len(candidate_points) == 0:
-            break
-
-    print(f'\nPlaced {placed_count}, Waste {waste}')
+    print('Done.')
     base = base.resize((w//AA, h//AA), resample=Image.LANCZOS)
     ofsx, ofsy = int((w/AA-ow)/2), int((h/AA-oh)/2)
     base = base.crop((ofsx,ofsy,ow+ofsx, oh+ofsy))
