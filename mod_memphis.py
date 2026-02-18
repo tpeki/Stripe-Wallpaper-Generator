@@ -36,13 +36,16 @@ SHAPES = [
     ('square_solid', 'square_hollow'),
     ('square_hollow', 'square_hollow'),
     ('circle_solid', 'circle_hollow'),
-    ('circle_solid', 'circle_lattice'),
     ('circle_hollow', 'circle_hollow'),
     ('square_dot', None),
+    ('circle_lattice2', None),
     ('chevron_line', None),
+    ('dot2', None),
     ]
 
 APPENDS = [
+    ('circle_solid', 'circle_lattice'),
+    ('square_solid', 'square_bias'),
     ('pon_de_ring', None),
     ('donuts', None),
     ('fish', None),
@@ -50,7 +53,6 @@ APPENDS = [
     ('crown_solid', 'crown_hollow'),
     ('medal', None),
     ('dot', None),
-    ('dot2', None),
     ('cross', None),
     ('arc', None),
     ('heart', None),
@@ -133,6 +135,21 @@ def square_hollow(size: int, color: tuple):
     return mask
 
 @register
+def square_bias(size: int, color: tuple):
+    lines = 8
+    sp = max(1, int(size/(lines*4)))*AA
+    lw = max(1, int(size/(lines*5)))*AA
+    bs = size*2
+    img1 = Image.new('RGBA', (bs,bs), 0)
+    md = ImageDraw.Draw(img1)
+    for x in range(lines+1):
+        md.line([(0,(x+1)*sp*2),((x+1)*sp*2,0)], fill=color, width=lw)
+
+    image = Image.new('RGBA', (size,size), 0)
+    image.paste(img1,(lw*2,lw*2),img1)
+    return image
+
+@register
 def circle_solid(size: int, color: tuple):
     r = size//2
     mask = Image.new('RGBA', (size, size), 0)
@@ -187,7 +204,7 @@ def arc(size: int, color: tuple):
 
 @register
 def dot(size: int, color: tuple):
-    r = max(2, int(size/32))*AA*3
+    r = max(2, int(size/32))*AA*2
     size = r*2
     image = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(image)
@@ -197,9 +214,9 @@ def dot(size: int, color: tuple):
 
 @register
 def dot2(size: int, color: tuple):
-    r = max(2, int(size/32))*AA*3
-    pr = max(2, int(size/32))*AA*2
-    size = r*3
+    pr = max(1, int(size/50))*AA*2
+    r = int(pr*2)
+    size = pr*6
     image = Image.new('RGBA', (size, size), 0)
     md = ImageDraw.Draw(image)
     color1 = np.random.randint(0,len(COLORS))
@@ -207,6 +224,7 @@ def dot2(size: int, color: tuple):
     if color1 == color2:
         color2 = (color1 + 2) % len(COLORS)
     
+    #md.rectangle((0,0,size,size),fill=color)
     md.circle((r+pr,r+pr), r, fill=COLORS[color2])
     md.circle((r,r), r, fill=COLORS[color1])
 
@@ -257,11 +275,10 @@ def square_dot(size: int, color: tuple):
     return image
 
 @register
-def circle_lattice(size: int, color: tuple):
+def circle_lattice(size: int, color: tuple, line_count=7):
     r = size // 2
-    line_count = 8
     space = int(size/line_count)
-    lw = max(2, int(size/32))*AA
+    lw = max(1, int(size/64))*AA
 
     mask = Image.new('L', (size, size), 0)
     md = ImageDraw.Draw(mask)
@@ -280,6 +297,10 @@ def circle_lattice(size: int, color: tuple):
 
     return image
 
+@register
+def circle_lattice2(size: int, color: tuple):
+    image = circle_lattice(size, color, line_count=5)
+    return image
 
 @register
 def chevron_line(size: int, color: tuple):
@@ -445,21 +466,25 @@ def fish(size: int, color: tuple):
 
 @register
 def takoyaki(size: int, color: tuple):
-    size = min(size, 500)
+    size = min(size, 500) # 最大サイズ
+
     im = Image.new('RGBA',(520, 520),0)
     md = ImageDraw.Draw(im)
+    nori = 30  # 青のりサイズ
 
     md.ellipse([(0,120),(460,520)],fill=Choco[0])
-    md.polygon([(480,0),(380,160),(396,180),(500,28),(480,0)],fill=color)
-    points = [(30,256)]
+    md.polygon([(480,0),(380,160),(396,180),(500,28),(480,0)],
+               fill=color)  # 楊枝
+    points = [(30,256)]  # ソース
     for x in range(5):
         dy = 2-abs(x-2)
         points.append((x*80+80,170-dy*20))
         points.append((x*80+60,320))
     points.append((445,260))
     md.line(points, fill=Choco[1], width=50, joint='curve')
-    for x in range(13):
-        md.rectangle(((x*28+40, 240-(x%2)*80),(x*28+60, 260-(x%2)*80)),
+    for x in range(13):  # 青のり
+        md.rectangle(((x*28+40, 240-(x%2)*80),
+                      (x*28+40+nori, 240+nori-(x%2)*80)),
                      fill=Choco[3])
 
     # 縮小して返す
