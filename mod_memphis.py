@@ -56,6 +56,8 @@ APPENDS = [
     ('cross', None),
     ('arc', None),
     ('heart', None),
+    ('penguin', None),
+    ('dashpanel', None),
     ]
 
 FN = {}
@@ -491,6 +493,90 @@ def takoyaki(size: int, color: tuple):
     im.thumbnail((size, size), Image.LANCZOS)
     return im
 
+@register
+def penguin(size: int, color: tuple):
+    sizey, size = size, int(size * 0.9)
+    cx = int(size/2)
+    ex = int(size/5)
+    ewr = int(size/7)
+    ebr = int(size*2/25)
+    mr = int(size/40)
+    pt = [int(sizey/5), int(sizey*2/5), int(sizey/2),
+          int(sizey*3/4), int(sizey*17/20)]
+    im = Image.new('RGBA',(size,sizey),0)
+    dr = ImageDraw.Draw(im)
+    for x in (ex, size-ex):
+        dr.circle((x,pt[0]),ewr,fill='white')
+        dr.circle((x,pt[0]),ebr,fill='black')
+    dr.polygon([(mr,pt[2]),(cx,pt[1]),(size-mr,pt[2]),(cx,pt[3])],
+               fill='#000000')
+    dr.polygon([(mr,pt[2]),(cx,pt[0]),(size-mr,pt[2]),(cx,pt[1])],
+               fill='#f4f354')
+    dr.polygon([(mr,pt[2]),(cx,pt[3]),(size-mr,pt[2]),(cx,pt[4])],
+               fill='#f4f354')
+    
+    dr.circle((mr,pt[2]),mr,'#f4f354')
+    dr.circle((size-mr,pt[2]),mr,'#f4f354')
+    
+    return im
+
+@register
+def dashpanel(size: int, color: tuple):
+    r=int(size/8)
+    image = Image.new('RGBA',(size,size),0)
+    waku = Image.new('RGBA',(size,size),(0,0,0,255))
+    waku_mask = roundedsquare_mask((0,0),size,r)
+    image.paste(waku, (0,0), waku_mask)
+
+    dash_color = [[(250,243,36),(255,194,0)],
+                  [(255,191,0),(255,59,0)]]
+    if np.random.randint(8) < 2:
+        panel_type = 1
+    else:
+        panel_type = 0
+
+    cs = RGBColor(*dash_color[panel_type][0])
+    ce = RGBColor(*dash_color[panel_type][1])
+    panel = vertical_gradient_rgb(size,size,cs,ce)
+
+    fwdmask = Image.new('L',(size,int(size/2)),0)
+    fd = ImageDraw.Draw(fwdmask)
+    s2=int(size/2)
+    s4=int(size/4)
+    fd.polygon([(-size,s4+size-s2),(s2,0),(size*2,s4+size-s2)],
+               outline=255, width=int(r*1.6))
+    for y in range(int((size/2)/8)):
+        fd.line([(0,y*8),(size,y*8)],fill=0,width=2)
+    for x in range(int(size/8)):
+        fd.line([(x*8,0),(x*8,int(size/2))],fill=0,width=2)
+    
+    fwdline = Image.new('RGBA', (size,int(size/2)), 'white')
+    if panel_type == 1:
+        panel.paste(fwdline,(0,s4-r),fwdmask)
+        panel.paste(fwdline,(0,int(s4+r*1.8)),fwdmask)
+    else:
+        panel.paste(fwdline,(0,0),fwdmask)
+        panel.paste(fwdline,(0,s2),fwdmask)
+
+    panel_mask = roundedsquare_mask((int(r/2),int(r/2)),size,int(r/2))
+    image.paste(panel, (0,0), panel_mask)
+
+    return image
+
+
+
+def roundedsquare_mask(pos:tuple, size:int, r:int):
+    sx,sy = pos
+    mask = Image.new('L',(size,size),0)
+    md = ImageDraw.Draw(mask)
+    md.rectangle([(sx,sy+r),(size-sx,size-sy-r)],fill=255)
+    md.rectangle([(sx+r,sy),(size-sx-r,size-sy)],fill=255)
+    md.circle((sx+r,sy+r),r,fill=255)
+    md.circle((size-sx-r,sy+r),r,fill=255)
+    md.circle((sx+r,size-sy-r),r,fill=255)
+    md.circle((size-sx-r,size-sy-r),r,fill=255)
+    
+    return mask
 
 # --- 描画サポート: dilation / erosion ---
 def circular_kernel(r):
