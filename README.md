@@ -1,8 +1,8 @@
 # wallpaper.pyw		壁紙用のシンプルなイメージを生成する
-V2.1.2  2026/02/02 efx未実装
+V2.2.0  2026/03/16 efxの事は棚上げ中
 
 ## 概要
-複雑なことはしません。
+複雑なことは(あまり)しません。
 Wallpaper用の画像を生成します。
 
 ## 必要ライブラリ
@@ -64,6 +64,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 - peano: ペアノ曲線
 - penrose: ペンローズタイル
 - scallop: ホタテ貝
+- sprites: スプライトまみれ  プレビュークリックでスプライト定義ファイルのLoad/Saveに対応
 - stripe: 縦ストライプ・モダン
 - tartan: タータン風チェック 柄エディタ付き
 - tiles: 正方形タイル (mode: 0=3色ミックス, 1=2色市松, 2=パース)
