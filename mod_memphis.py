@@ -58,6 +58,7 @@ APPENDS = [
     ('heart', None),
     ('penguin', None),
     ('dashpanel', None),
+    ('burger', None),
     ]
 
 FN = {}
@@ -577,6 +578,80 @@ def roundedsquare_mask(pos:tuple, size:int, r:int):
     md.circle((size-sx-r,size-sy-r),r,fill=255)
     
     return mask
+
+@register
+def burger(size: int, color: tuple):
+    BNZ, BEF = '#fFB744','#ee0000'
+    LTS = '#97FF47'
+    CHZ = '#FFF352'
+    EGG,BCN = '#FCFCE0','#F56B9D'
+    l,b,c = [x > 0x7f for x in color]  # レタス,ベーコンエッグ,チーズ
+
+    w,h = size,size*2
+    qt,pen = size//4,(size//4)//2
+    q3,spc = qt*3,int(pen*0.2)
+
+    def bar(d, x1,y,x2,thic,col):
+        d.line((x1,y,x2,y), fill=col, width=thic)
+        r=int(thic/2-0.5)
+        d.circle((x1,y),r,fill=col)
+        d.circle((x2,y),r,fill=col)
+
+    im = Image.new("RGBA",(w,h),0)
+    bunz = Image.new('RGBA',(w,h),0)
+    bd = ImageDraw.Draw(bunz)
+
+    # 上バンズ
+    y = q3//2-pen//2
+    bd.pieslice((0,0,w,q3),190,-10,fill=BNZ,width=pen)
+    bar(bd, pen//2, y, w-pen//2, pen, BNZ)
+
+    # 具
+    fill = Image.new('RGBA',(w,h),0)
+    pd = ImageDraw.Draw(fill)
+    fh = q3//2+spc
+
+    if l:
+        lpen,ww = int(pen*0.8), int(w*0.8)
+        dy = int((pen+lpen)/4)
+        ll = [v for i in range(9) \
+              for v in (int(w/10+i*ww/8), fh+dy*2-(i%2)*dy)]
+        pd.line(ll, fill=LTS, width=lpen, joint='curve')
+        pd.circle((ll[0],ll[1]),lpen//2,fill=LTS)
+        pd.circle((ll[-2],ll[-1]),lpen//2,fill=LTS)
+        fh += dy*2+spc*2
+
+    if b:
+        dx,th = int(pen/3), int(pen*0.3)
+        pd.rectangle((dx,fh+spc,w-dx,fh+pen), fill=EGG)
+        pd.rectangle((dx,fh+pen,w-dx,fh+pen+th), fill=BCN)
+        fh += pen+th+spc
+
+    if c:
+        th = int(pen*0.6)
+        bar(pd, pen//2, fh+th//2, w-pen//2, th, CHZ)
+        fh += th+spc
+
+    # Bが200以上ならダブルミート
+    for _ in range(2 if color[2] > 200 else 1):
+        th = int(pen*0.9)
+        bar(pd, th//2, fh+th//2, w-th//2, th, BEF)
+        fh += th + spc
+        
+    im.paste(fill,(0,0),fill)
+
+    # 下バンズ
+    bd.pieslice((0,fh-pen,qt,fh+pen),90,180,fill=BNZ)
+    bd.pieslice((w-qt,fh-pen,w,fh+pen),0,90,fill=BNZ)
+    bd.rectangle((qt//2,fh,w-qt//2,fh+pen),fill=BNZ)
+
+    im.paste(bunz,(0,0),bunz)
+
+    bbox = im.getbbox()
+    if bbox:
+        im = im.crop(bbox)
+
+    return im
 
 # --- 描画サポート: dilation / erosion ---
 def circular_kernel(r):
