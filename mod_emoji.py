@@ -41,7 +41,7 @@ X_PITCH = 2.2
 Y_PITCH = 1.8
 
 def intro(modlist: Modules, module_name):
-    modlist.add_module(module_name, '絵文字 4文字時検討中',
+    modlist.add_module(module_name, '絵文字!  形状=0:タイリング/1:スパイラル',
                        {'color1':'基本色',
                         'color_jitter':'背景色幅',
                         'sub_jitter':'彩度(%)',
@@ -73,10 +73,10 @@ def desc(p: Param):
         pix[i] = Image.new('RGB', (pixsiz,pixsiz),
                            '#404040')  # view 36pts
         drw[i] = ImageDraw.Draw(pix[i])
-        if emoji_preserv['chars'][i] is None:
-            codes[i] = None
-        else:
+        if emoji_preserv['chars'][i]:
             codes[i] = ord(emoji_preserv['chars'][i])
+        else:  #  is None
+            codes[i] = None
 
     font_name = emoji_preserv['font']
     font_area = [emoji_preserv['font-from'],
@@ -139,10 +139,10 @@ def desc(p: Param):
                    grab_anywhere=True, padding_x=0, padding_y=0, modal=True)
     
     for i in range(4):
-        if codes[i] is None:
-            one_chr(pix[i], font, pixfont, 0x20)
-        else:
+        if codes[i]:
             one_chr(pix[i], font, pixfont, codes[i])
+        else:  # is None
+            one_chr(pix[i], font, pixfont, 0x20)
         wn[f'-ch{i}_img-'].update(data=pix[i])
     wn['-page-'].update(f'U+{cp:X} -')
 
@@ -160,24 +160,36 @@ def desc(p: Param):
         elif ev == '-sel-' and va['event_type'] == 'mousedown':
             # 文字一覧クリック → codes[cur]を指定絵文字に
             x, y = get_pos(str(va['event']))
-            # det = wn[ev].get_event_details()  # バグってた
-            # x,y = det.x, det.y
             col = int(x/cpbox)
             row = int((y-8)/cpbox)
+            
             if row >= rows:
                 code = None
             else:
                 code = cp + col + row*cols
             codes[cur] = code
-            if code is None:
-                one_chr(pix[cur], font, pixfont, 0x20)
-            else:
+            if code:
                 one_chr(pix[cur], font, pixfont, code)
+            else: # is None
+                one_chr(pix[cur], font, pixfont, 0x20)
+                
             wn[f'-ch{cur}_img-'].update(data=pix[cur])
+            wn[f'-ch{cur}_id-'].update(codestr(codes[cur]))
+            # print(f'sel: -ch{cur}_id- -> {codestr(codes[cur])}')
+
             cur = min(3, max(cur+1, 0))
             drw[cur].rectangle((0,0,pixsiz-3,pixsiz-3), fill=None,
                                outline='#ff0000', width=3)
             wn[f'-ch{cur}_img-'].update(data=pix[cur])
+            
+        elif ev == '-clr-':
+            codes[cur] = None
+            one_chr(pix[cur], font, pixfont, 0x20)
+            drw[cur].rectangle((0,0,pixsiz-3,pixsiz-3), fill=None,
+                               outline='#ff0000', width=3)
+            wn[f'-ch{cur}_img-'].update(data=pix[cur])
+            wn[f'-ch{cur}_id-'].update('')
+            # print(f'clr: -ch{cur}_id- -> {codestr(codes[cur])}')
             
         elif ev == '-prev-':
             cp = cp - 0x100  if cp > font_area[0]  else font_area[0]
@@ -194,21 +206,23 @@ def desc(p: Param):
         elif ev in ('-ch0_img-','-ch1_img-','-ch2_img-','-ch3_img-') and \
              va['event_type'] == 'mousedown':
             # 利用絵文字枠クリック→設定対象変更
-            if codes[cur] is None:
-                one_chr(pix[cur], font, pixfont, 0x20)
-            else:
+            if codes[cur]:
                 one_chr(pix[cur], font, pixfont, codes[cur])
-            
+            else:  # is None
+                one_chr(pix[cur], font, pixfont, 0x20)
             wn[f'-ch{cur}_img-'].update(data=pix[cur])
+
             cur = int(ev[3])
 
-            if codes[cur] is None:
-                one_chr(pix[cur], font, pixfont, 0x20)
-            else:
+            if codes[cur]:
                 one_chr(pix[cur], font, pixfont, codes[cur])
+            else:  #  is None
+                one_chr(pix[cur], font, pixfont, 0x20)
             drw[cur].rectangle((0,0,pixsiz-3,pixsiz-3), fill=None,
                                outline='#ff0000', width=3)
             wn[f'-ch{cur}_img-'].update(data=pix[cur])
+            wn[f'-ch{cur}_id-'].update(codestr(codes[cur]))
+            # print(f'img: -ch{cur}_id- -> {codestr(codes[cur])}')
             
         elif ev == '-ok-':
             lst = list(filter(None, codes))
@@ -218,6 +232,7 @@ def desc(p: Param):
                     emoji_preserv['chars'][i] = chr(lst[i])
                     # print(i, emoji_preserv['chars'])
                 break
+        #wn.refresh()
             
     for x in ('winding', 'base_size', 'large_size', 'sp_dense', 'sp_lines'):
         val = wn[f'-{x}-'].get_text()
@@ -378,12 +393,12 @@ def generate(p: Param):
 
     # 背景となるimageを生成
     # image = Image.new("RGB", (width, height), base_color)
-    if p.h_img is None:
+    if p.h_img:
+        image = p.bg()
+    else:  # is None
         image = vertical_gradient_rgb(width, height,
                                       base_color,
                                       rgb_random_jitter(base_color, jitter))
-    else:
-        image = p.bg()
 
     draw = ImageDraw.Draw(image)
     font_name = emoji_preserv['font']
