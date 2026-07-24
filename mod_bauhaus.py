@@ -244,22 +244,22 @@ def bar(x, y, S):
 
 @register
 def mesh(x, y, S):
-    sw = S//9
+    sw = S/9
     return ((x % (2*sw)) < sw) ^ ((y % (2*sw)) < sw)
 
 @register
 def half_stripe(x, y, S):
-    sw = S//8
+    sw = S/8
     return ((x % (2*sw)) < sw) & (y < S//2)
 
 @register
 def stripe(x, y, S):
-    sw = S//8
+    sw = S/8
     return (x % (2*sw)) < sw
 
 @register
 def pinstripe(x, y, S):
-    sw = S//30
+    sw = S/30
     return (x % (3*sw)) < sw
 
 
@@ -487,7 +487,7 @@ def desc(p: Param):
     if cols > 4:
         cols = 4
     rows = (inum+cols-1)//cols
-    for v in range(cols):  # 1かラムrow行
+    for v in range(cols): 
         clayout = [[sg.Text('Mask Name', size=(14,1)),
                      sg.Text('Flag', size=(6,1)),
                      sg.Text('Prob.', size=(6,1))],]
@@ -669,7 +669,7 @@ def overlay_random_pattern(sub, bank, weights, names, c1, c2, delta,
     """同じセル(sub)にランダムなパターンを1回重ね書きする"""
 
     # 別のパターンを選ぶ
-    if not idx is None:
+    if idx:
         name = names[idx]
         base = [i for i, v in enumerate(names) if v == name]
         no = base.index(idx)
