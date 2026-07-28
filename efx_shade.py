@@ -500,13 +500,48 @@ def add_silhouette(fgimg, mask, bgimg=None,
 
 def resize_keepasp(img, W, H):
     iw, ih = img.size
-    if iw/ih == W/H:
-        if iw == W:
-            return img
-        return img.resize((W,H), resample=Image.NEAREST)
+    if ih == H and iw == W:
+        return img
 
     r = min(W/iw, H/ih)
     return image.resize((int(iw*r),int(ih*r)), resample=Image.LANCZOS)
+
+
+def plain_image(W, H, base=(192,192,192), baseadd=(64,64,64), contrast=0.02):
+    c = tuple(clip8(np.random.randint(base[i],base[i] + baseadd[i]))
+              for i in range(3))
+    img = Image.new('RGBA', (W, H), color=c)
+
+    fg = np.array(img, dtype=np.float32)
+    factor = swirl_marble(W,H, swirl=8, contrast=contrast)
+    res = (fg * factor[...,None]).astype(np.uint8)
+        
+    return Image.fromarray(res, mode='RGBA')
+
+
+def swirl_marble(W, H, freq=10, swirl=6, wobble=0.25, contrast=0.22):
+    xs = np.linspace(-1, 1, W, endpoint=False)
+    ys = np.linspace(-1, 1, H, endpoint=False)
+    X, Y = np.meshgrid(xs, ys)
+
+    # アスペクト比補正
+    aspect = W / H
+    if aspect > 1:
+        Y = Y * aspect
+    else:
+        X = X / aspect
+
+    rad = np.sqrt(X * X + Y * Y)
+    phi = np.arctan2(Y, X)
+
+    flow = (
+        rad * freq
+        + phi * swirl
+        + wobble * np.sin(phi * 5 + rad * 8)
+    )
+
+    base = (1.0 + contrast * np.sin(flow)).astype(np.float32)
+    return np.clip(base, 0, 1)
 
 
 # -----
@@ -643,24 +678,31 @@ def getto(va, name, default, lo=None, hi=None):
     except KeyError:
         v = ''
         
-    if '.' in v:
-        try:
-            retv = float(v)
-        except ValueError:
-            retv = default
-    else:
-        try:
-            retv = int(v, 0)
-        except ValueError:
-            retv = default
+    retv = safeint(v, default)
     
-    if lo is not None:
+    if lo:
         retv = max(lo, retv)
-    if hi is not None:
+    if hi:
         retv = min(retv, hi)
 
     shade_preserv['prevsets']['shade'][name] = retv
     return retv
+
+
+def safeint(s, default=0):
+    if not isinstance(s,str):
+        return default
+    if '.' in s:
+        try:
+            r = float(s)
+        except ValueError:
+            r = default
+    else:
+        try:
+            r = int(s,0)
+        except ValueError:
+            r = default
+    return r
 
 
 def efx(image, p: Param):
@@ -675,8 +717,14 @@ def efx(image, p: Param):
     except AttributeError:
         pass
 
-    bgimg = p.bg(W,H)
-    bgfile = '*internal*' if bgimg is not None else ''
+    init_bgimg = p.bg(W,H)
+    init_fgimg = image if image else plain_image(W,H)
+    if init_bgimg:
+        bgfile = '*internal*'
+    else:
+        bgfile = '*frontimage*'
+        init_bgimg = init_fgimg
+    
 
     shift = shade_preserv['prevsets']['shade']['shift']
     alpha = shade_preserv['prevsets']['shade']['alpha']
@@ -688,6 +736,11 @@ def efx(image, p: Param):
     for i, x in enumerate(FN.keys()):
         menu_lo.append(mask_line(x, True if i == 0 else False))
 
+    fgmenu = ['FG', 'BG', 'Plain']
+    base = (192,192,192)
+    baseadd = (63,63,63)
+
+    fgc, bgc = bg_and_font(base)
     lo = [[sg.Frame(title='Flavor Type', layout=menu_lo,
                     relief='ridge', expand_x=True)],
           [sg.Image(size=preview_size, key='-timg-')],
@@ -701,7 +754,26 @@ def efx(image, p: Param):
            sg.Text(' BG Brightness='),
            sg.Input(f'{adjbri}', key='-s_adjbri-', width=5),
            ],
-          [sg.Checkbox('FG=BG', default=False, key='-fgbg-'),
+          [sg.Text('BG-Image'),
+           sg.Combo(fgmenu, default_value='BG', key='-bgsel-', width=5,
+                    readonly=True),
+           sg.Text(' BG file:'),
+           sg.Button('Select BG', key='-file1-', background_color='#ffffdd'),
+           sg.Text(bgfile, key='-fn1-'),  #, width=20
+           ],
+          [sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
+           sg.Text('  Plain: '),
+           sg.Button('BaseColor', key='-bgc-', text_color=fgc,
+                     background_color=bgc),
+           sg.Text('Jitter'), sg.Input(f'{clip8(255-max(*base))}',
+                                       key='-badd-', width=4),
+           sg.Text('Contrast%'), sg.Input('0', key='-bcont-', width=4),
+           sg.Text('', expand_x=True),
+           sg.Button('Test', key='-test-'),
+           sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
+           sg.Button('Cancel', key='-can-', background_color='#ffdddd'),],
+          ]
+    """   [sg.Checkbox('FG=BG', default=False, key='-fgbg-'),
            sg.Button('Select BG', key='-file1-', background_color='#ffffdd'),
            sg.Text(bgfile, key='-fn1-', width=20),
            sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
@@ -709,11 +781,12 @@ def efx(image, p: Param):
            sg.Button('Test', key='-test-'),
            sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
            sg.Button('Cancel', key='-can-', background_color='#ffdddd'),]]
-
+    """
+           
     src_path = None
     mask_name = next(iter(FN))
 
-    sample = add_silhouette(image, mask_name, bgimg,
+    sample = add_silhouette(init_fgimg, mask_name, init_bgimg,
                             shift=shift, alpha=alpha, blur=blur, adjbri=adjbri) 
    
     wn = sg.Window('Add Flavor', layout=lo)
@@ -759,14 +832,31 @@ def efx(image, p: Param):
         blur = getto(va, 'blur', blur, 0)
         adjbri = getto(va, 'adjbri', adjbri)
         scan_va(va, mask_name)
+
+        if va['-bgsel-'] == 'FG':
+            bgimg = init_fgimg
+        elif va['-bgsel-'] == 'PLain':
+            addv = safeint(va['-badd-'])
+            addv = clip8(min(255 - max(*base), addv))
+            contrast = min(max(0,safeint(va['-bcont-'])),100)
+            bgimg = plain_image(W, H, base=base, baseadd=(addv,addv,addv),
+                                contrast=contrast/100)
+        else:  # va['-bgsel-'] == 'BG'
+            bgimg = init_bgimg
+        
+
         if va['-swap-']:
-            sample = add_silhouette(bgimg, mask_name, image,
-                                    shift=shift, alpha=alpha,
-                                    blur=blur, adjbri=adjbri)
+              bg = init_fgimg
+              fg = bgimg
         else:
-            sample = add_silhouette(image, mask_name, bgimg,
-                                    shift=shift, alpha=alpha,
-                                    blur=blur, adjbri=adjbri)
+              fg = init_fgimg
+              bg = bgimg
+
+        sample = add_silhouette(fg, mask_name, bg, shift=shift, alpha=alpha,
+                                blur=blur, adjbri=adjbri)
+        wn['-timg-'].update(sample)
+
+        print(ev)
 
     wn.close()
 
