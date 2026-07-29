@@ -1,11 +1,11 @@
+from wall_common import *
 import TkEasyGUI as sg
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 import numpy as np
 import math
 import copy
 import os.path as pa
-from wall_common import *
-from filedialog import *
+import filedialog as fdi
 import inspect
 
 # 各maskのパラメータ設定もいれられるようにする：mod_ivy参照
@@ -439,7 +439,7 @@ def ladder_mask(W, H, Steps=8, Width=12.0, Rail=10.0,
 
 # PROC functions
 # 前景を切り抜いて影付きで貼る(numpy版)
-def add_silhouette(fgimg, mask, bgimg=None,
+def add_silhouette(fgimg, mask, bgimg,
                    shift=30, alpha=90, blur=8, adjbri=0.0,
                    sharp_radius=0, sharp_percent=180, sharp_threshold=3,
                    W=1920, H=1080):
@@ -447,27 +447,14 @@ def add_silhouette(fgimg, mask, bgimg=None,
     # alpha = 90  影の透過度(0-255)
     # blur = 8    影のぼかし半径(pixel)
 
-    if fgimg is not None:
-        foreground = fgimg.convert("RGBA")
-        W, H = foreground.size
-    elif bgimg is not None:
-        foreground = bgimg.convert("RGBA")
-        W, H = foreground.size
-    else:
-        c = tuple(int(np.random.randint(192,256)) for i in range(3))
-        foreground = Image.new('RGBA', (W, H), color=c)
+
+    W, H = fgimg.size
 
     if isinstance(mask, None | str):
         if mask in FN.keys():
             mask = FN[mask]['func'](W, H)
         else:
             mask = FN[next(iter(FN))]['func'](W, H)
-
-    if bgimg is not None:
-        bgimg = resize_keepasp(bgimg, W, H)
-        bgimg = bgimg.convert("RGBA")
-    else:
-        bgimg = foreground.copy()
 
     # 影
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -478,7 +465,7 @@ def add_silhouette(fgimg, mask, bgimg=None,
     dx = -shift
     dy = -shift
 
-    base_np = np.array(foreground)
+    base_np = np.array(fgimg.convert("RGBA"))
     shifted_np = np.roll(base_np, shift=(dy, dx), axis=(0, 1))
     shifted = Image.fromarray(shifted_np, mode="RGBA")
 
@@ -491,7 +478,7 @@ def add_silhouette(fgimg, mask, bgimg=None,
                                                percent=sharp_percent,
                                                threshold=sharp_threshold))
     # 合成
-    result = adjust_brightness(bgimg, adjbri)
+    result = adjust_brightness(bgimg.convert("RGBA"), adjbri)
     result = Image.alpha_composite(result, shadow)
     result = Image.alpha_composite(result, fg)
 
@@ -504,13 +491,16 @@ def resize_keepasp(img, W, H):
         return img
 
     r = min(W/iw, H/ih)
-    return image.resize((int(iw*r),int(ih*r)), resample=Image.LANCZOS)
+    return img.resize((int(iw*r),int(ih*r)), resample=Image.LANCZOS)
 
 
 def plain_image(W, H, base=(192,192,192), baseadd=(64,64,64), contrast=0.02):
-    c = tuple(clip8(np.random.randint(base[i],base[i] + baseadd[i]))
-              for i in range(3))
-    img = Image.new('RGBA', (W, H), color=c)
+    c = []
+    for i in range(3):
+        c.append(clip8(base[i]))
+        if c[i] < 255 and baseadd[i] > 0:
+            c[i] = clip8(np.random.randint(c[i], base[i]+baseadd[i]))
+    img = Image.new('RGBA', (W, H), color=tuple(c))
 
     fg = np.array(img, dtype=np.float32)
     factor = swirl_marble(W,H, swirl=8, contrast=contrast)
@@ -711,82 +701,87 @@ def efx(image, p: Param):
     MASKS = {FN[_]['display']: _ for _ in FN.keys()}
 
     W, H = p.width, p.height
+    init_fgimg = image if image else plain_image(W,H)    
     try:
-        if image.size != (W,H):
-            image = image.resize((W,H), resample=Image.LANCZOS)
+        if init_fgimg.size != (W,H):
+            init_fgimg = init_fgimg.resize((W,H), resample=Image.LANCZOS)
     except AttributeError:
         pass
 
     init_bgimg = p.bg(W,H)
-    init_fgimg = image if image else plain_image(W,H)
-    if init_bgimg:
-        bgfile = '*internal*'
-    else:
-        bgfile = '*frontimage*'
-        init_bgimg = init_fgimg
-    
 
+    # default Bacic Params
     shift = shade_preserv['prevsets']['shade']['shift']
     alpha = shade_preserv['prevsets']['shade']['alpha']
     blur = shade_preserv['prevsets']['shade']['blur']
     adjbri = shade_preserv['prevsets']['shade']['adjbri']
-
-                
+    bgmenu = ['FG', 'BG', 'File', 'Plain']
+    bgind = ['*frontimage*', '*internal*', '*file*', '*plain*']
+    if init_bgimg:
+        bgfile = bgind[1]
+        bgmode = 'BG'
+        bgimg = init_bgimg
+    else:
+        bgfile = bgind[0]
+        bgmode = 'FG'
+        bgimg = init_fgimg
+ 
+    base = (192,192,192)
+    swirlcont = 0
+    file_image = None
+    fgc, bgc = bg_and_font(base)
+     
+    # UI panel                
     menu_lo = []
     for i, x in enumerate(FN.keys()):
         menu_lo.append(mask_line(x, True if i == 0 else False))
 
-    fgmenu = ['FG', 'BG', 'Plain']
-    base = (192,192,192)
-    baseadd = (63,63,63)
+    shadeset = [[sg.Text(' Shift='),
+                 sg.Input(f'{shift}', key='-s_shift-', width=4),
+                 sg.Text(' Blur='),
+                 sg.Input(f'{blur}', key='-s_blur-', width=4),
+                 sg.Text(' Intent'),
+                 sg.Input(f'{alpha}', key='-s_alpha-', width=4),
+                 sg.Text(' BG Brightness='),
+                 sg.Input(f'{adjbri}', key='-s_adjbri-', width=5),
+                 ]]
 
-    fgc, bgc = bg_and_font(base)
+    bgset = [[sg.Combo(bgmenu, default_value=bgmode, key='-bgsel-',
+                       width=5, readonly=True, enable_events=True),
+              sg.Text(' BG file:'),
+              sg.Button('Select BG', key='-file1-', background_color='#ffffdd'),
+              sg.Text(bgfile, key='-fn1-'),
+              ],
+             [sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
+              sg.Text(' Plain: '),
+              sg.Button('BaseColor', key='-bgc-', text_color=fgc,
+                        background_color=bgc),
+              sg.Text('Jitter'), sg.Input(f'{clip8(255-max(*base))}',
+                                          key='-badd-', width=4),
+              sg.Text('Contrast%'), sg.Input(f'{swirlcont}',
+                                             key='-bcont-', width=4),
+              sg.Text(' ', expand_x=True),
+            ]]
+    buttonset = [[sg.Text('', expand_y=True)],
+                 [sg.Text(' '*4, expand_x=True),
+                  sg.Button('Test', key='-test-'),
+                  sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
+                  sg.Button('Cancel', key='-can-', background_color='#ffdddd'),
+                  ]]
+
     lo = [[sg.Frame(title='Flavor Type', layout=menu_lo,
                     relief='ridge', expand_x=True)],
           [sg.Image(size=preview_size, key='-timg-')],
-          [sg.Text('BASIC Parameters:', text_color='#0000dd'),
-           sg.Text(' Shift='),
-           sg.Input(f'{shift}', key='-s_shift-', width=4),
-           sg.Text(' Blur='),
-           sg.Input(f'{blur}', key='-s_blur-', width=4),
-           sg.Text(' Intent'),
-           sg.Input(f'{alpha}', key='-s_alpha-', width=4),
-           sg.Text(' BG Brightness='),
-           sg.Input(f'{adjbri}', key='-s_adjbri-', width=5),
-           ],
-          [sg.Text('BG-Image'),
-           sg.Combo(fgmenu, default_value='BG', key='-bgsel-', width=5,
-                    readonly=True),
-           sg.Text(' BG file:'),
-           sg.Button('Select BG', key='-file1-', background_color='#ffffdd'),
-           sg.Text(bgfile, key='-fn1-'),  #, width=20
-           ],
-          [sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
-           sg.Text('  Plain: '),
-           sg.Button('BaseColor', key='-bgc-', text_color=fgc,
-                     background_color=bgc),
-           sg.Text('Jitter'), sg.Input(f'{clip8(255-max(*base))}',
-                                       key='-badd-', width=4),
-           sg.Text('Contrast%'), sg.Input('0', key='-bcont-', width=4),
-           sg.Text('', expand_x=True),
-           sg.Button('Test', key='-test-'),
-           sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
-           sg.Button('Cancel', key='-can-', background_color='#ffdddd'),],
-          ]
-    """   [sg.Checkbox('FG=BG', default=False, key='-fgbg-'),
-           sg.Button('Select BG', key='-file1-', background_color='#ffffdd'),
-           sg.Text(bgfile, key='-fn1-', width=20),
-           sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
-           sg.Text('', expand_x=True),
-           sg.Button('Test', key='-test-'),
-           sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
-           sg.Button('Cancel', key='-can-', background_color='#ffdddd'),]]
-    """
+          [sg.Frame('Common Shading', layout=shadeset, relief='ridge',
+                    expand_x=True)],
+          [sg.Frame('Background', layout=bgset, relief='ridge'),
+           sg.Column(buttonset),],
+           ]
            
     src_path = None
     mask_name = next(iter(FN))
 
-    sample = add_silhouette(init_fgimg, mask_name, init_bgimg,
+    sample = add_silhouette(init_fgimg, mask_name, bgimg,
                             shift=shift, alpha=alpha, blur=blur, adjbri=adjbri) 
    
     wn = sg.Window('Add Flavor', layout=lo)
@@ -802,49 +797,63 @@ def efx(image, p: Param):
             break
         elif ev == '-ok-':
             break
-        elif ev == '-fgbg-':
-            if va['-fgbg-']:
-                wn['-file1-'].set_disabled(True)
-                bgimg = None
-                bgfile = ''
-            else:
-                wn['-file1-'].set_disabled(False)
-                bgimg = p.bg(W,H)
-                bgfile = '*internal*' if bgimg is not None else ''
-            wn['-fn1-'].update(bgfile)
         elif ev == '-file1-':
-            src_path = get_openfile(bgfile, filetypes=File_types)
+            src_path = fdi.get_openfile('', filetypes=File_types)
             bgfile = pa.basename(src_path)
             if pa.exists(src_path):
-                bgimg = Image.open(src_path)
-            else:
-                bgimg = p.bg(W,H)
-                bgfile = '*internal*' if bgimg is not None else ''
-            wn['-fn1-'].update(bgfile)
-        else:
-            try:
+                file_image = Image.open(src_path).convert('RGBA')
+                file_image = file_image.resize((W,H), resample=Image.LANCZOS)
+                va['-bgsel-'] = 'File'
+                bgmode = None
+            fdi.flush_ev(wn)
+        elif ev == '-bgc-':
+            base = to_rgb(sg.popup_color('Select Base Color', default_color=base))
+            fgc, bgc = bg_and_font(base)
+            wn['-bgc-'].update(background_color=bgc, text_color=fgc)
+            va['-bgsel-'] = 'Plain'
+            bgmode = None
+            fdi.flush_ev(wn)
+        elif ev == '-test-':
+            bgmode = None
+
+        if '-item-' in va:
+            if va['-item-'] in FN:
                 mask_name = va['-item-']
-            except KeyError:
-                mask_name =  next(iter(FN))
-                
+        scan_va(va, mask_name)
+
         shift = getto(va, 'shift', shift, 0)
         alpha = getto(va, 'alpha', alpha, 0, 255)
         blur = getto(va, 'blur', blur, 0)
         adjbri = getto(va, 'adjbri', adjbri)
-        scan_va(va, mask_name)
 
-        if va['-bgsel-'] == 'FG':
-            bgimg = init_fgimg
-        elif va['-bgsel-'] == 'PLain':
+        if va['-bgsel-'] == 'Plain' and bgmode != 'Plain':
+            # print('Plain selected')
+            bgmode = 'Plain'
+            wn['-fn1-'].update(bgind[3])
             addv = safeint(va['-badd-'])
-            addv = clip8(min(255 - max(*base), addv))
             contrast = min(max(0,safeint(va['-bcont-'])),100)
             bgimg = plain_image(W, H, base=base, baseadd=(addv,addv,addv),
                                 contrast=contrast/100)
-        else:  # va['-bgsel-'] == 'BG'
-            bgimg = init_bgimg
-        
+        elif va['-bgsel-'] == 'File':
+            # print('File selected')
+            if file_image is not None and bgmode != 'File':
+                bgmode = 'File'
+                wn['-fn1-'].update(bgfile)
+                bgimg = file_image
+        elif va['-bgsel-'] == 'BG':
+            # print('BG selected')
+            if init_bgimg is not None and bgmode != 'BG':
+                bgmode = 'BG'
+                wn['-fn1-'].update(bgind[1])
+                bgimg = init_bgimg
+        elif va['-bgsel-'] == 'FG':  # and bgmode != 'FG':
+            # print('FG selected')
+            bgmode = 'FG'
+            wn['-fn1-'].update(bgind[0])
+            bgimg = init_fgimg
 
+        wn['-bgsel-'].update(bgmode)
+                
         if va['-swap-']:
               bg = init_fgimg
               fg = bgimg
@@ -856,7 +865,7 @@ def efx(image, p: Param):
                                 blur=blur, adjbri=adjbri)
         wn['-timg-'].update(sample)
 
-        print(ev)
+        wn.refresh()
 
     wn.close()
 
