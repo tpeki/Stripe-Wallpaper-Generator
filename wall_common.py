@@ -1,4 +1,4 @@
-'''wallpaper generator 共通クラス＆関数'''
+"""wallpaper generator 共通クラス＆関数"""
 from dataclasses import dataclass
 import random
 import re
@@ -9,12 +9,48 @@ import os.path as pa
 import colorsys
 
 def clip8(x):
-    '''clip8(x) -> {x | 0 <= x <= 255}の整数に制限する'''
+    """clip8(x) -> {x | 0 <= x <= 255}の整数に制限する"""
     return min(255, max(int(x), 0))
 
 
+def stoi(s, default=0, lo=None, hi=None, multi=False):
+    """文字列を数値に プレフィクス、実数対応
+       省略可パラメータ default:変換失敗時の値, lo,hi:下限、上限
+       multi=False:先頭の値、True:階層リスト(list と ','区切り文字列)対応"""
+    if isinstance(s, list):  # リストだったら各要素を変換
+        ret = [stoi(x, default, lo, hi, multi=multi) for x in s]
+        return ret if multi else ret[0]
+
+    if isinstance(s, (int, float)):  # 数値だったらすぐ返す
+        ret = s
+        
+    elif isinstance(s, str):
+        s = s.strip().lower()
+        if ',' in s:  # カンマ区切り文字列はリストにして再変換
+            return stoi(s.split(','), default, lo, hi, multi=multi)
+
+        try:
+            if s.startswith(('0x','0o','0b')):  # プレフィクス付き
+                ret = int(s, 0)
+            elif '.' in s or 'e' in s:  # 実数
+                ret = float(s)
+            else:  # 整数
+                ret = int(s)
+        except ValueError or SyntaxError:
+            ret = float(default) if '.' in s or 'e' in s else int(default)
+    else:  # よくわからない型だったらデフォ
+        ret = default
+
+    if lo is not None:
+        ret = max(lo, ret)
+    if hi is not None:
+        ret = min(ret, hi)
+
+    return ret
+
+
 class RGBColor:
-    '''色を格納するクラス'''
+    """色を格納するクラス"""
     def __init__(self, *args):
         self.r, self.g, self.b = self._parse(args)
 
@@ -75,7 +111,7 @@ PARAMVALS = ['color1', 'color2', 'color3',
 
 @dataclass
 class Param:
-    '''モジュールに渡すパラメータ'''
+    """モジュールに渡すパラメータ"""
     width: int = 1920
     height: int = 1080
     wwidth: int = 0  # tk makes automatically
@@ -162,7 +198,7 @@ class Param:
 # 利用パラメータリストは、利用するパラメータ名のリスト(入っているものは利用)
 #  (例) mod_gui['stripe'] = ['color1', 'color_jitter', 'pwidth', ...]
 class Modules:
-    '''プラグインモジュール情報'''
+    """プラグインモジュール情報"""
     def __init__(self):
         self.modules = []
         self.mod_desc = {}
@@ -183,7 +219,7 @@ def is_param(x:str):
 
 
 class EfxModules:
-    '''AfterEffectモジュール情報'''
+    """AfterEffectモジュール情報"""
     def __init__(self):
         self.modules = []
         self.mod_desc = {}
@@ -198,30 +234,31 @@ class EfxModules:
             self.mod_desc[module_name] = module_desc
             self.mod_type[module_name] = spec_dict
 
-# 背景パターン
-def rgb_random_jitter(color: RGBColor, jitter):
-    '''(R,G,B)に対してそれぞれ±jitterの幅でランダムに変化'''
-    rgb = color.ctoi()
+
+# 色演算  color -> color etc.
+def rgb_random_jitter(color, jitter):
+    """(R,G,B)に対してそれぞれ±jitterの幅でランダムに変化"""
+    rgb = to_rgb(color)
     rgb = tuple(clip8((c + random.randint(-jitter, jitter))) for c in rgb)
     return RGBColor(rgb)
 
 
-def rated_jitter(color: RGBColor, jitter_r):
-    '''jitter_rで元の色に対して何%の変動かを与える'''
+def rated_jitter(color, jitter_r):
+    """jitter_rで元の色に対して何%の変動かを与える"""
     j = min(1.0, max(jitter_r/100.0, 0.0))
-    rgb = color.ctoi()
+    rgb = to_rgb(color)
     rgb = tuple(clip8(c*(1+random.uniform(-j, j))) for c in rgb)
     return RGBColor(rgb)
 
 
-def brightness(color: RGBColor, f=1.0, h=0.0, s=1.0, bg=None):
-    '''色をHSL値で調整 → retruns: RGBColor
+def brightness(color, f=1.0, h=0.0, s=1.0, bg=None):
+    """色をHSL値で調整 → retruns: RGBColor
     f: lightness darken if f < l.0, lighten if f > 1.0 (multiply)
     s: satulation cahge in s (multiply)
     h: hue change in h (add)
     bg: returns default color when result is (0,0,0)
-    '''
-    crgb = color.ctoi()
+    """
+    crgb = to_rgb(color)
     r_norm, g_norm, b_norm = [c / 255.0 for c in crgb]
     ch, cl, cs = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
 
@@ -238,33 +275,15 @@ def brightness(color: RGBColor, f=1.0, h=0.0, s=1.0, bg=None):
                     round(b_new * 255))
 
 
-def sat_attenate(image, ratio):
-    '''彩度の変更： 0 < ratio(%) < 200 '''
-    enhancer = ImageEnhance.Color(image)
-    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
-
-def bri_attenate(image, ratio):
-    '''明度の変更： 0 < ratio(%) < 200 '''
-    enhancer = ImageEnhance.Brightness(image)
-    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
-
-def con_attenate(image, ratio):
-    '''コントラストの変更： 0 < ratio(%) < 200 '''
-    enhancer = ImageEnhance.Contrast(image)
-    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
-
-
 def rgb_lerp(c1, c2, t):
-    ''' RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)'''
+    """ RGB値の線形補完 c1,c2=tuple(r,g,b), t=比率(0..1)"""
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
 
 def bg_and_font(color):
-    '''色指定文字列かRGBColorで色を受け取り、前景テキストと色指定文字列を返す'''
-    if isinstance(color,str):
+    """色指定文字列かRGBColorで色を受け取り、前景テキストと色指定文字列を返す"""
+    if isinstance(color,(str,RGBColor)):
         color = to_rgb(color)
-    elif isinstance(color, RGBColor):
-        color = color.ctoi()
     rgb = color         
 
     l = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2])/255
@@ -276,28 +295,28 @@ def bg_and_font(color):
     return f, rgb_string(rgb)
 
 
-# def draw_vertical_gradient_rgb(draw, width, height,
-#                                  c1: RGBColor, c2: RGBColor):
-#     '''縦グラデーションで塗りつぶし
-#     draw: PIL.ImageDraw
-#     c1,c2: RGBColor
-#     '''
-#     max_d = height
-#     cc1 = c1.ctoi()
-#     cc2 = c2.ctoi()
-#     pen = 10
-#     tick = int(pen/2)-1
-# 
-#     for y in range(int(height/pen)):
-#             t = y*pen/max_d
-#             color = rgb_lerp(cc1, cc2, t)
-#             draw.line((0, y*pen+tick, width-1, y*pen+tick),
-#                       fill=color, width=pen)
-            
+# 色調調整 Image -> Image
+def sat_attenate(image, ratio):
+    """彩度の変更： 0 < ratio(%) < 200 """
+    enhancer = ImageEnhance.Color(image)
+    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
 
-def vertical_gradient_rgb(width, height, cstart:RGBColor, cend:RGBColor):
-    cs = cstart.ctoi()  # 開始色 (上)
-    ce = cend.ctoi()    # 終端色 (下)
+def bri_attenate(image, ratio):
+    """明度の変更： 0 < ratio(%) < 200 """
+    enhancer = ImageEnhance.Brightness(image)
+    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
+
+def con_attenate(image, ratio):
+    """コントラストの変更： 0 < ratio(%) < 200 """
+    enhancer = ImageEnhance.Contrast(image)
+    return enhancer.enhance(min(2.0, max(0.0, ratio/100.0)))
+
+
+# 背景パターン
+def vertical_gradient_rgb(width, height, cstart, cend):
+    """縦グラデーションのImage.Imageビットマップ"""
+    cs = to_rgb(cstart)  # 開始色 (上)
+    ce = to_rgb(cend)   # 終端色 (下)
     
     y_axis = np.linspace(0, 1, height).reshape(-1, 1)
     r = np.tile(y_axis, (1, width))
@@ -306,9 +325,10 @@ def vertical_gradient_rgb(width, height, cstart:RGBColor, cend:RGBColor):
     return Image.fromarray(np.dstack((r, g, b)).astype(np.uint8), 'RGB')
 
 
-def horizontal_gradient_rgb(width, height, cstart:RGBColor, cend:RGBColor):
-    cs = cstart.ctoi()  # 開始色(左)を(r,g,b)に変換
-    ce = cend.ctoi()  # 終端色(右)を(r,g,b)に変換
+def horizontal_gradient_rgb(width, height, cstart, cend):
+    """横グラデーションのImage.Imageビットマップ"""
+    cs = to_rgb(cstart)  # 開始色(左)を(r,g,b)に変換
+    ce = to_rgb(cend)  # 終端色(右)を(r,g,b)に変換
     
     x_axis = np.linspace(0, 1, width)
     r = np.tile(x_axis, (height, 1))
@@ -316,24 +336,18 @@ def horizontal_gradient_rgb(width, height, cstart:RGBColor, cend:RGBColor):
     return Image.fromarray(np.dstack((r, g, b)).astype(np.uint8), 'RGB')
 
 
-def diagonal_gradient_rgb(width, height, color1:RGBColor, color2:RGBColor):
-    '''
-    NumPy で高速に斜めグラデーションを作る
-    color1, color2: RGBColor ctoi() -> (r,g,b)
-    return: PIL.Image
-    '''
+def diagonal_gradient_rgb(width, height, cstart, cend):
+    """対角(右上－左下)グラデーションのImage.Imageビットマップ"""
     y, x = np.mgrid[0:height, 0:width]  # 座標グリッド
     t = (x + y) / (width + height)  # 正規化パラメータ t
 
     # RGB を配列化
-    c1 = color1.ctoi()
-    c2 = color2.ctoi()
-    
-    c1 = np.array(c1, dtype=np.float32)
-    c2 = np.array(c2, dtype=np.float32)
+    cs = to_rgb(cstart)
+    ce = to_rgb(cend)
+    cs = np.array(cs, dtype=np.float32)
+    ce = np.array(ce, dtype=np.float32)
 
-    # 線形補完（ブロードキャスト）
-    img = c1 + (c2 - c1) * t[..., None]
+    img = cs + (ce - cs) * t[..., None]  # 線形補完（ブロードキャスト）
 
     return Image.fromarray(img.astype(np.uint8), 'RGB')
 
@@ -347,7 +361,7 @@ def diagonal_gradient_rgb(width, height, color1:RGBColor, color2:RGBColor):
 
 
 def rgb_string(*args):
-    """"文字列、タプル、RGBColorの値を'#rrggbbに変換"""
+    """文字列、タプル、RGBColorの値を'#rrggbb'に変換"""
     x = args[0] if len(args)==1 else args
     if isinstance(x, str):
         try:
@@ -389,7 +403,7 @@ def to_rgb(*args):
 
 
 def get_pos(event_str: str):
-    '''Mouse Event文字列から座標を取り出す'''
+    """Mouse Event文字列から座標を取り出す"""
     # print(event_str)   
     x_match = re.search(r"x=(\d+)", event_str)
     y_match = re.search(r"y=(\d+)", event_str)
@@ -398,3 +412,5 @@ def get_pos(event_str: str):
     mouse_y = int(y_match.group(1)) if y_match else -1
 
     return (mouse_x, mouse_y)
+
+
