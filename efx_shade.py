@@ -11,9 +11,7 @@ import inspect
 # 各maskのパラメータ設定もいれられるようにする：mod_ivy参照
 
 FN = {}  # 登録先辞書
-shade_preserv = {'prevsets':
-                 {'shade':{'shift':30, 'alpha':90, 'blur':20, 'adjbri':-80.0},
-                  },
+shade_preserv = {'shade':{'shift':30, 'alpha':90, 'blur':20, 'adjbri':-80.0},
                  }
 
 File_types = [('PNG','*.png'),('JPG','*.jpg'),('Any','*.*'),]
@@ -75,7 +73,7 @@ def intro(efxlist: EfxModules, module_name):
 # 保存パラメータがあれば返す
 # =========================
 def prevset(name, value, funcname, lo=None, hi=None):
-    retv = shade_preserv['prevsets'].get(funcname, {}).get(name, value)
+    retv = shade_preserv.get(funcname, {}).get(name, value)
     
     if lo is not None:
         retv = max(lo, retv)
@@ -86,9 +84,9 @@ def prevset(name, value, funcname, lo=None, hi=None):
 
 
 def storehist(name, value, funcname):
-    if shade_preserv['prevsets'].get(funcname,None) is None:
-        shade_preserv['prevsets'][funcname] = {}
-    shade_preserv['prevsets'][funcname][name] = value
+    if shade_preserv.get(funcname,None) is None:
+        shade_preserv[funcname] = {}
+    shade_preserv[funcname][name] = value
     return
 
 
@@ -661,7 +659,7 @@ def scan_va(va, mask_name):
     
 def getto(va, name, default, lo=None, hi=None):
     key = f'-s_{name}-'
-    pv = shade_preserv['prevsets']['shade'].get(name, default)
+    pv = shade_preserv['shade'].get(name, default)
     
     try:
         v = va[key]
@@ -675,7 +673,7 @@ def getto(va, name, default, lo=None, hi=None):
     if hi:
         retv = min(retv, hi)
 
-    shade_preserv['prevsets']['shade'][name] = retv
+    shade_preserv['shade'][name] = retv
     return retv
 
 
@@ -696,7 +694,9 @@ def safeint(s, default=0):
 
 
 def efx(image, p: Param):
-    dcpy = copy.deepcopy(shade_preserv['prevsets'])
+    global shade_preserv
+    
+    dcpy = copy.deepcopy(shade_preserv)
     preview_size = (640,360)
     MASKS = {FN[_]['display']: _ for _ in FN.keys()}
 
@@ -711,10 +711,10 @@ def efx(image, p: Param):
     init_bgimg = p.bg(W,H)
 
     # default Bacic Params
-    shift = shade_preserv['prevsets']['shade']['shift']
-    alpha = shade_preserv['prevsets']['shade']['alpha']
-    blur = shade_preserv['prevsets']['shade']['blur']
-    adjbri = shade_preserv['prevsets']['shade']['adjbri']
+    shift = shade_preserv['shade']['shift']
+    alpha = shade_preserv['shade']['alpha']
+    blur = shade_preserv['shade']['blur']
+    adjbri = shade_preserv['shade']['adjbri']
     bgmenu = ['FG', 'BG', 'File', 'Plain']
     bgind = ['*frontimage*', '*internal*', '*file*', '*plain*']
     if init_bgimg:
@@ -793,12 +793,13 @@ def efx(image, p: Param):
 
         if ev == sg.WINDOW_CLOSED or ev == '-can-':
             sample = image
-            shade_preserv['prevsets'] = dcpy
+            shade_preserv = dcpy
             break
         elif ev == '-ok-':
             break
         elif ev == '-file1-':
-            src_path = fdi.get_openfile('', filetypes=File_types)
+            src_path = fdi.get_openfile(fdi.sanitize_filename(bgfile),
+                                        filetypes=File_types)
             bgfile = pa.basename(src_path)
             if pa.exists(src_path):
                 file_image = Image.open(src_path).convert('RGBA')

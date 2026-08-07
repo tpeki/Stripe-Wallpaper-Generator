@@ -228,7 +228,8 @@ class EfxModules:
     def add_module(self, module_name: str, module_desc: str,
                    spec_dict):
         if module_name.startswith('efx_'):
-            module_name = module_name.split('efx_')[1]
+            module_name = module_name[4:]
+            module_name = 'AE_'+module_name
         if module_name not in self.modules:
             self.modules.append(module_name)
             self.mod_desc[module_name] = module_desc

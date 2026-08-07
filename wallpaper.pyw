@@ -66,7 +66,7 @@ def search_aftereffects(efxlist: EfxModules, plugin_dir):
     for modf in glob.glob(plugin_pat, root_dir=plugin_dir):
         modname = pa.splitext(modf)[0]
         if modname.startswith('efx_'):
-            modname = modname[4:]
+            modname = 'AE_'+modname[4:]
         
         spec = impl.spec_from_file_location(modname, modf)
         module = impl.module_from_spec(spec)
@@ -148,7 +148,8 @@ def search_aftereffects(efxlist: EfxModules, plugin_dir):
 # メインGUI
 # ----
 def layout(modlist, efxlist):
-    x = ['AE_'+item for item in efxlist.modules]
+    #x = ['AE_'+item for item in efxlist.modules]
+    x = [item for item in efxlist.modules]
     menudef = [['File', ['Load BG', '---', 'Save', 'Exit']],
                ['Module', modlist.modules],
                ['Hold', ['Hold', 'Clear', 'Retrieve']],
@@ -556,7 +557,8 @@ def gui_main(modlist: Modules, mods, param: Param,
                 scale, cropos = update_preview(param, image, wn)
             continue
         elif ev.startswith('AE_'):
-            efx_name = ev[3:]
+            efx_name = ev
+            print(ev)
             if efx_name in efxlist.modules:
                 image = efxs[efx_name].efx(image, param)
                 scale, cropos = update_preview(param, image, wn)
