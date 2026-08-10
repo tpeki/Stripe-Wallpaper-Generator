@@ -28,9 +28,11 @@ def intro(efxlist: EfxModules, module_name):
 
 # 保存パラメータがあれば返す
 # =========================
-def prevset(name, value, funcname, lo=None, hi=None):
+def prevset(name, default, funcname, lo=None, hi=None):
     """global辞書の値を取得 name=保存名 value=デフォルト値 funcname=グループ名"""
-    retv = lines_preserv.get(funcname, {}).get(name, value)
+    retv = lines_preserv.get(funcname, {}).get(name, default)
+    if retv is None:
+        retv = default
     
     if lo is not None:
         retv = max(lo, retv)
@@ -90,19 +92,25 @@ def reg(*, display=None):
 
 # MASK functions
 @reg(display="Simple Stripes")
-def stripe(W, H, cx=None, cy=None, exclude=0, pitch=20, duty=0.4, angle=0.0):
+def stripe(W, H, pitch=20, duty=0.4, angle=0.0, exclude=0, cx=None, cy=None):
     """W,H: 画像サイズ  cx,cy: 中心位置
     exclude: 非描画半径  pitch:周期(px.)  duty: 白黒比  angle: 角度(水平=90)
     """
+    if cx is None:
+        cx = 50
+    if cy is None:
+        cy = 50
+
     cx = prevset('cx', cx, 'stripe')
-    cy = prevset('cx', cx, 'stripe')
+    cy = prevset('cy', cy, 'stripe')
     exclude = prevset('exclude', exclude, 'stripe')
     pitch = prevset('pitch', pitch, 'stripe')
     duty = prevset('duty', duty, 'stripe')
     angle = prevset('angle', angle, 'stripe')
+
+    cx = int(cx*W/100)
+    cy = int(cy*H/100)
     
-    if cx is None: cx = W/2
-    if cy is None: cy = H/2
     angle = np.deg2rad(angle)
 
     # グリッド
@@ -131,19 +139,23 @@ def stripe(W, H, cx=None, cy=None, exclude=0, pitch=20, duty=0.4, angle=0.0):
 
 
 @reg(display="Radial Stripes")
-def radial(W, H, cx=None, cy=None, exclude=240, freq=120, duty=0.3):
+def radial(W, H, freq=120, duty=0.3, exclude=240, cx=None, cy=None):
     """W,H : 画像サイズ  cx,cy : 中心位置
     exclude: 中心の非描画半径  freq: 周期  duty: 白黒比(0..1,1=全白)"""
 
+    if cx is None:
+        cx = 50
+    if cy is None:
+        cy = 50
+
     cx = prevset('cx', cx, 'radial')
-    cy = prevset('cx', cx, 'radial')
+    cy = prevset('cy', cy, 'radial')
     exclude = prevset('exclude', exclude, 'radial')
     freq = prevset('freq', freq, 'radial')
     duty = prevset('duty', duty, 'radial')
+    cx = int(cx*W/100)
+    cy = int(cy*H/100)
     
-    if cx is None: cx = W/2
-    if cy is None: cy = H/2
-
     y, x = np.ogrid[:H, :W]
     dx = x - cx
     dy = y - cy
@@ -173,12 +185,11 @@ def radial(W, H, cx=None, cy=None, exclude=240, freq=120, duty=0.3):
 
 # PROC functions
 # maskを貼る(numpy版)
-def add_stripe(baseimg, mask, stripeimg, shift=2, alpha=40, blur=5,
-                   W=1920, H=1080):
-    # shift = 30  影のシフト量(pixel)
-    # alpha = 90  影の透過度(0-255)
-    # blur = 8    影のぼかし半径(pixel)
-
+def add_stripe(baseimg, mask, stripeimg):
+    """ストライプ設定"""
+    shift = prevset('shift', 30, 'shade')  # shift = 30  影のシフト量(pixel)
+    alpha = prevset('alpha', 40, 'shade')  # alpha = 90  影の透過度(0-255)
+    blur = prevset('blur', 8, 'shade')  # blur = 8    影のぼかし半径(pixel)
 
     W, H = baseimg.size
 
@@ -277,34 +288,21 @@ def scan_va(va, mask_name):
                 rx = stoi(rx)
                 ry = stoi(ry)
                 val = [rx,ry]
-                print(f'exclude! <- {val}')
+                #print(f'exclude! <- {val}')
             elif val == 'None' or val == '':
                 val = None
-                print(f'{param} <- None')
+                #print(f'{param} <- None')
             else:
                 val = stoi(val)
-                print(f'{param} <- {val}')
+                #print(f'{param} <- {val}')
             storehist(param, val, mask_name)
     return
 
     
-def getto(va, name, default, lo=None, hi=None):
-    key = f'-s_{name}-'
-    pv = lines_preserv['shade'].get(name, default)
-    
-    try:
-        v = va[key]
-    except KeyError:
-        v = ''
-        
-    retv = stoi(v, default)
-    
-    if lo:
-        retv = max(lo, retv)
-    if hi:
-        retv = min(retv, hi)
-
-    lines_preserv['shade'][name] = retv
+def getval(val, name, default, cat, lo=None, hi=None):
+    retv = stoi(val, default, lo, hi)
+    if retv is not None:
+        storehist(name, retv, cat)
     return retv
 
 
@@ -352,36 +350,46 @@ def efx(image, p: Param):
     menu_lo = []
     for i, x in enumerate(FN.keys()):
         menu_lo.append(mask_line(x, True if i == 0 else False))
+    menu_lo.append([sg.Text('exclude=x,y will ellipsed-void / cx,cy is % for W,H',
+                            text_align='right', expand_x=True)])
 
     bgset = [[sg.Combo(bgmenu, default_value=bgmode, key='-bgsel-',
                        width=5, readonly=True, enable_events=True),
+              sg.Text(' '),
+              sg.Text(' File:'),
+              sg.Button('Select', key='-file1-', background_color='#ffffdd'),
+              sg.Text(bgfile, key='-fn1-', expand_x=True),
+              ],
+             [sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
               sg.Text(' Plain: '),
-              sg.Button('BaseColor', key='-bgc-', text_color=fgc,
+              sg.Button('Base', key='-bgc-', text_color=fgc,
                         background_color=bgc),
               sg.Text('Jitter'), sg.Input(f'{clip8(255-max(*base))}',
                                           key='-badd-', width=4),
-              sg.Text('Contrast%'), sg.Input(f'{swirlcont}',
-                                             key='-bcont-', width=4),
-              sg.Text(' ', expand_x=True),
-              ],
-             [sg.Checkbox('Swap FG/BG', default=False, key='-swap-'),
-              sg.Text(' File:'),
-              sg.Button('Select', key='-file1-', background_color='#ffffdd'),
-              sg.Text(bgfile, key='-fn1-'),
+              sg.Text('Cont%'), sg.Input(f'{swirlcont}',
+                                         key='-bcont-', width=4),
               ]]
-    buttonset = [[sg.Text('', expand_y=True)],
-                 [sg.Text(' '*4, expand_x=True),
-                  sg.Button('Test', key='-test-'),
-                  sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
-                  sg.Button('Cancel', key='-can-', background_color='#ffdddd'),
-                  ]]
+    shadeset = [[sg.Text(' Shift='),
+                 sg.Input(f'{shift}', key='-sshift-', width=4),
+                 sg.Text(' Blur='),
+                 sg.Input(f'{blur}', key='-sblur-', width=4),
+                 sg.Text(' Intent'),
+                 sg.Input(f'{alpha}', key='-salpha-', width=4),
+                 sg.Text(' ', expand_x=True),
+                 ]]
+    buttonset = [sg.Text(' '*4, expand_x=True),
+                 sg.Button('Test', key='-test-'),
+                 sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
+                 sg.Button('Cancel', key='-can-', background_color='#ffdddd'),
+                 ]
 
     lo = [[sg.Frame(title='Flavor Type', layout=menu_lo,
                     relief='ridge', expand_x=True)],
           [sg.Image(size=preview_size, key='-timg-')],
-          [sg.Frame('Stripes', layout=bgset, relief='ridge'),
-           sg.Column(buttonset),],
-           ]
+          [sg.Frame('Stripe Fill', layout=bgset, relief='ridge'),
+           sg.Column([[sg.Frame('Shade', layout=shadeset, relief='ridge'),],
+                      buttonset])],
+          ]
            
     src_path = None
     mask_name = next(iter(FN))
@@ -426,9 +434,9 @@ def efx(image, p: Param):
                 mask_name = va['-item-']
                 
         scan_va(va, mask_name)
-        shift = getto(va, 'shift', shift, 0)
-        alpha = getto(va, 'alpha', alpha, 0, 255)
-        blur = getto(va, 'blur', blur, 0)
+        getval(va['-sshift-'], 'shift', shift, 'shade', lo=0)
+        getval(va['-salpha-'], 'alpha', alpha, 'shade', lo=0, hi=255)
+        getval(va['-sblur-'], 'blur', blur, 'shade', lo=0)
 
         if va['-bgsel-'] == 'Plain' and bgmode != 'Plain':
             # print('Plain selected')
@@ -465,8 +473,7 @@ def efx(image, p: Param):
               fg = fgimg
               bg = bgimg
 
-        sample = add_stripe(fg, mask_name, bg, shift=shift, alpha=alpha,
-                                blur=blur)
+        sample = add_stripe(fg, mask_name, bg)
         wn['-timg-'].update(sample)
 
         wn.refresh()

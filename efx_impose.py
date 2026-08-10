@@ -29,10 +29,10 @@ BgMenu = ['FG', 'BG', 'File', 'Plain']
 BgInd = ['*frontimage*', '*internal*', '*file*', '*plain*']
 Mask_Code = {'cal': 'calendar', 'txt': 'text', 'lor': 'lorem'}
 
-calendar_preserv = {'shade': {'shift':50, 'alpha':40, 'blur':10},
+calendar_preserv = {'shade': {'shift':8, 'alpha':40, 'blur':10, 'enbri':0.0},
                     'font': {'key':None, 'size':64, 'fontdic':{}},
-                    'common': {'pos':2, 'grad':0, 'lspc':1.4, 'spc':1.3,
-                               'half':238, 'mid':35},
+                    'common': {'pos':2, 'lspc':1.4, 'spc':1.3, 'half':238,
+                               'grad':0, 'mid':35, 'xpad':32, 'ypad':32},
                     'calendar': {'year':2026, 'month':1, 'multi':1,
                                  'wend':1, 'holi':1},
                     'text': {'msg1$': '','msg2$': ''},
@@ -66,8 +66,8 @@ def intro(efxlist: EfxModules, module_name):
 
 # 保存パラメータがあれば返す
 # =========================
-def prevset(name, value, funcname, lo=None, hi=None):
-    retv = calendar_preserv.get(funcname, {}).get(name, value)
+def prevset(name, default, funcname, lo=None, hi=None):
+    retv = calendar_preserv.get(funcname, {}).get(name, default)
     
     if lo is not None:
         retv = max(lo, retv)
@@ -545,6 +545,8 @@ def text_mask():
     spc = int(size * lspc)
     grad = prevset('grad', None, 'common', lo=0)
     mid = prevset('mid', None, 'common', lo=0, hi=100)
+    pos = prevset('pos', None, 'common', lo=0, hi=8)
+    h_align = pos % 3  # 0:left 1:center 2:right
 
     limgs = []
     lhlist = []
@@ -581,8 +583,15 @@ def text_mask():
     img = Image.new('L', (maxw, totalh), 0)
     y = 0
     for l in limgs:
-        img.paste(l, (0,y))
-        y = y+l.height+spc
+        lw, lh = l.size
+        if h_align == 2:
+            x = maxw - lw
+        elif h_align == 1:
+            x = int((maxw - lw)/2)
+        else:
+            x = 0
+        img.paste(l, (x,y))
+        y = y+lh+spc
 
     img = img.crop(img.getbbox())
     return img
@@ -603,21 +612,42 @@ def lorem_mask():
     lspc = prevset('lspc', None, 'common')
     grad = prevset('grad', None, 'common', lo=0)
     mid = prevset('mid', None, 'common', lo=0, hi=100)
+    pos = prevset('pos', None, 'common', lo=0, hi=8)
+    h_align = pos % 3  # 0:left 1:center 2:right
 
-
-    img = Image.new('L', (int(lorwidth*size), int(len(lines)*size*lspc)), 0)
-    y = 0
+    limgs = []
+    maxw = 0
+    maxh = 0
     for l in lines:
-        lim = text_image(l, source, index=index, size=size, color=WDAY_INT)
-        lw, lh = lim.size
+        ltmp = text_image(l, source, index=index, size=size, color=WDAY_INT)
+        lw, lh = ltmp.size
         if grad == 1:  # gradation linear
             maskpat = linear_line_mask(lw, lh, mid)
         elif grad == 2:  # gradation stripe line
             maskpat = stripe_line_mask(lw, lh, mid)
         else:
             maskpat = Image.new('L', (lw, lh), 255)
-        
-        img.paste(maskpat, (0,y), lim)
+        limg = Image.new('L', (lw, lh), 0)
+        limg.paste(maskpat, (0,0), ltmp)
+        limg = limg.crop(limg.getbbox())
+        lw, lh = limg.size
+        maxw = max(maxw, lw)
+        maxh += lh
+        limgs.append(limg)
+    maxh = int(maxh*lspc - (lspc-1)*lh)
+    
+    img = Image.new('L', (maxw, maxh), 0)
+    y = 0
+    for lim in limgs:
+        lw, lh = lim.size
+        if h_align == 2:
+            x = maxw - lw
+        elif h_align == 1:
+            x = int((maxw - lw)/2)
+        else:
+            x = 0
+            
+        img.paste(lim, (x,y), lim)
         y = y+int(lh*lspc)
 
     img = img.crop(img.getbbox())
@@ -626,15 +656,18 @@ def lorem_mask():
 
 # PROC functions
 # 前景を切り抜いて影付きで貼る(numpy版)
-def add_silhouette(fgimg, mask_name, bgimg, shift=0, alpha=90, blur=8,
-                   sharp_radius=0, sharp_percent=180, sharp_threshold=3,
-                   W=1920, H=1080):
-    # shift = 30  影のシフト量(pixel)
-    # alpha = 90  影の透過度(0-255)
-    # blur = 8    影のぼかし半径(pixel)
+def impose_mask(fgimg, mask_name, bgimg, W=None, H=None):
+    """bgimg上にfgimgをmaskで切り出してインポーズする"""
+    # shift = 8   影のシフト量(pixel)
+    # alpha = 40  影の透過度(0-255)
+    # blur = 10   影のぼかし半径(pixel)
+    shift = prevset('shift', 8, 'shade')
+    alpha = prevset('alpha', 40, 'shade')
+    blur = prevset('blur', 10, 'shade')
+    enbright = prevset('enbri', 0, 'shade')
 
-
-    W, H = fgimg.size
+    if W is None or H is None:
+        W, H = fgimg.size
 
     if mask_name == 'cal':
         mask = calendar_mask()
@@ -653,21 +686,18 @@ def add_silhouette(fgimg, mask_name, bgimg, shift=0, alpha=90, blur=8,
     shadow = shadow.filter(ImageFilter.GaussianBlur(blur))
 
     # 周期シフト
-    dx = -shift
-    dy = -shift
+    dx = shift
+    dy = shift
 
-    base_np = np.array(fgimg.convert('RGBA'))
-    shifted_np = np.roll(base_np, shift=(dy, dx), axis=(0, 1))
-    shifted = Image.fromarray(shifted_np, mode='RGBA')
+    shadow_np = np.array(shadow.convert('RGBA'))
+    shifted_np = np.roll(shadow_np, shift=(dy, dx), axis=(0, 1))
+    shadow = Image.fromarray(shifted_np, mode='RGBA')
 
     # マスクで切り抜き
-    fg = Image.composite(shifted,
-                         Image.new('RGBA', (W, H), (0, 0, 0, 0)),
-                         mask)
-    if sharp_radius > 0:
-        fg = fg.filter(ImageFilter.UnsharpMask(radius=sharp_radius,
-                                               percent=sharp_percent,
-                                               threshold=sharp_threshold))
+    fg = Image.composite(fgimg, Image.new('RGBA', (W, H), (0, 0, 0, 0)), mask)
+    if enbright != 0.0:
+        fg = adjust_brightness(fg, enbright)
+
     # 合成
     result = bgimg.convert('RGBA')
     result = Image.alpha_composite(result, shadow)
@@ -682,22 +712,23 @@ def allocate_img(W,H, img):
         img = img.convert('L')
 
     iw, ih = img.size
-    
+    xpad = prevset('xpad', None, 'common', lo=0)
+    ypad = prevset('ypad', None, 'common', lo=0)
     imgpos = prevset('pos', None, 'common', lo=0, hi=8)
 
     if (imgpos // 3) == 2:  # south
-        iy = H - ih - PADDING
+        iy = H - ih - ypad
     elif (imgpos // 3) == 1:  # center
         iy = (H - ih)//2
     else:  # north
-        iy = PADDING
+        iy = ypad
     
     if (imgpos % 3) == 2:  # east
-        ix = W - iw - PADDING
+        ix = W - iw - xpad
     elif (imgpos % 3) == 1:  # center
         ix = (W - iw)//2
     else:  # west
-        ix = PADDING
+        ix = xpad
 
     baseimg.paste(img, (ix, iy), img)
     # print(f'{imgpos} -> {ix},{iy}')
@@ -748,6 +779,46 @@ def swirl_marble(W, H, freq=10, swirl=13, wobble=3.3, contrast=0.04):
     return np.clip(base, 0, 1)
 
 
+# 明度変更補助
+def srgb_to_linear(x, gamma):
+    """numpy配列: sRGB(ガンマあり) → リニア変換"""
+    x = x / 255.0
+    base = np.maximum(x + 0.055, 0.0) / 1.055
+    return np.where(x <= 0.04045, x / 12.92, base ** gamma)
+
+def linear_to_srgb(x, gamma):
+    """numpy配列: リニア → sRGB(ガンマあり)変換"""
+    x = np.clip(x, 0.0, 1.0)
+    return np.where(x < 0.0031308, x * 12.92,
+                    1.055 * (x ** (1/gamma)) - 0.055) * 255.0
+
+# --- 明度加算（ガンマ込み） ---
+def adjust_brightness(img, delta: float, gamma: float = 2.2):
+    """PILイメージの明度をdelta(-255.0..255.0)加算
+    (gamma=2.2(sRGB), 1.8(Mac68k), )"""
+    
+    arr = np.asarray(img).astype(np.float32)
+
+    # RGB / RGBA 判定
+    has_alpha = (arr.shape[-1] == 4)
+    rgb = arr[..., :3]
+    alpha = arr[..., 3] if has_alpha else None
+
+    # 明度加算（linear 空間で行う）
+    rgb_lin = srgb_to_linear(rgb, gamma)
+    delta_lin = srgb_to_linear(np.array([delta], dtype=np.float32), gamma)[0]
+    rgb_lin = rgb_lin + delta_lin
+
+    # 再構成
+    rgb_srgb = linear_to_srgb(rgb_lin, gamma)
+    if has_alpha:
+        out = np.dstack([rgb_srgb, alpha])
+    else:
+        out = rgb_srgb
+
+    return Image.fromarray(out.astype(np.uint8))
+
+
 # --------------------
 # main
 # --------------------
@@ -768,19 +839,12 @@ def scan_va(va, mask_name):
     return
 
     
-def getto(va, name, default, lo=None, hi=None):
-    key = f'-s_{name}-'
-    pv = calendar_preserv['shade'].get(name, default)
-    
-    try:
-        v = va[key]
-    except KeyError:
-        return None
-        
-    retv = stoi(v, default, lo=lo, hi=hi)
-
-    calendar_preserv['shade'][name] = retv
-    return retv
+def getval(elemval, name, cat, default=None, lo=None, hi=None):
+    """elementの値(文字列)を数値化して保存"""
+    v = stoi(elemval, default, lo, hi)
+    if v is not None:
+        storehist(name, v, cat)
+    return v
 
 
 # FontDir探索スレッド
@@ -808,28 +872,24 @@ def efx(image, p: Param):
             init_fgimg = init_fgimg.resize((W,H), resample=Image.LANCZOS)
     except AttributeError:
         pass
+    file_image = None
 
     # default Bacic Params
     shift = prevset('shift', None, 'shade')
     alpha = prevset('alpha', None, 'shade')
     blur = prevset('blur', None, 'shade')
+    enbri = prevset('enbri', None, 'shade')
 
     base = Init_Color
     addv = 255 - max(base)
-    init_bgimg = p.bg(W,H)
-    if init_bgimg is None:
-        bgimg = plain_image(W,H, base=base, baseadd=(addv,addv,addv))
-        bgfile = BgInd[3]
-        bgmode = BgMenu[3]
-    else:
-        bgfile = BgInd[1]
-        bgmode = BgMenu[1]
-        bgimg = init_bgimg
- 
-    file_image = None
     fgc, bgc = bg_and_font(base)
+    bgimg = plain_image(W,H, base=base, baseadd=(addv,addv,addv))
+    bgfile = BgInd[3]
+    bgmode = BgMenu[3]
 
-    font_dir = Font_Dir
+    init_bgimg = p.bg(W,H)
+ 
+    font_dir = Font_Dir  # 初期フォントディレクトリ
     fkeys, fdic = make_font_dic(font_dir)
     if len(fkeys) == 0:
         fkeys, fdic = make_font_dic(SysFont_Dir)
@@ -858,6 +918,9 @@ def efx(image, p: Param):
     cmid = prevset('mid', None, 'common')
     cpos = prevset('pos', None, 'common')
     cgrad = prevset('grad', None, 'common')
+    cxpd = prevset('xpad', None, 'common')
+    cypd = prevset('ypad', None, 'common')
+    
      
     # UI panel                
     fontset = [[sg.Text(f'Fonts ({font_dir})', '-fdir-'),
@@ -880,17 +943,19 @@ def efx(image, p: Param):
         sg.Input(f'{cmid}', key='-cmid-', width=3),
         sg.Text(expand_x=True),
         ]
-    commonparam = [
-        sg.Text(expand_x=True),
-        sg.Text('BlockSpace'),
-        sg.Input(f'{cspc}', key='-cspc-', width=4),
-        sg.Text('LineSpace'),
-        sg.Input(f'{clspc}', key='-clspc-', width=4),
-        sg.Text(' '),
-        sg.Text('Block Align'),
-        sg.Combo(POS, key='-cpos-', size=(4,1), readonly=True,
-                 default_value=POS[cpos], enable_events=True),
-        sg.Text('  '),]
+    commonparam = [[sg.Text('BlockSpace', expand_x=True),
+                    sg.Input(f'{cspc}', key='-cspc-', width=4),
+                    sg.Text('X-pad'),
+                    sg.Input(f'{cxpd}', key='-cxpd-', width=4),],
+                   [sg.Text('LineSpace', expand_x=True),
+                    sg.Input(f'{clspc}', key='-clspc-', width=4),
+                    sg.Text('Y-pad'),
+                    sg.Input(f'{cypd}', key='-cypd-', width=4),],
+                   [sg.Text(expand_x=True),
+                    sg.Text('Block Align'),
+                    sg.Combo(POS, key='-cpos-', size=(4,1), readonly=True,
+                             default_value=POS[cpos], enable_events=True),]
+                   ]
     calparam = [
         sg.Radio('', group_id='-shpg-', default=True,
                  key='-shpcal-', enable_events=True),
@@ -931,17 +996,19 @@ def efx(image, p: Param):
                                  txtparam,
                                  lorparam,[],
                                  fontextparam,
-                                 commonparam,
                                  ])
                ]]
 
-    shadeset = [[sg.Text(' Shift='),
-                 sg.Input(f'{shift}', key='-s_shift-', width=4),
+    shadeset = [[sg.Text('Shift='),
+                 sg.Input(f'{shift}', key='-sshift-', width=4),
                  sg.Text(' ', expand_x=True),],
-                [sg.Text(' Blur='),
-                 sg.Input(f'{blur}', key='-s_blur-', width=4),],
-                [sg.Text(' Intent'),
-                 sg.Input(f'{alpha}', key='-s_alpha-', width=4),],
+                [sg.Text('Blur='),
+                 sg.Input(f'{blur}', key='-sblur-', width=4),],
+                [sg.Text('Intent'),
+                 sg.Input(f'{alpha}', key='-salpha-', width=4),],
+                [],
+                [sg.Text('Fg-Enbright'),
+                 sg.Input(f'{enbri}', key='-senbri-', width=4),],
                 ]
     bgset = [[sg.Combo(BgMenu, default_value=bgmode, key='-bgsel-',
                        width=5, readonly=True, enable_events=True),
@@ -970,6 +1037,8 @@ def efx(image, p: Param):
           [sg.Image(size=preview_size, key='-timg-'),
            sg.Column(layout=[[sg.Frame('Shading', layout=shadeset,
                                        relief='ridge', expand_x=True),],
+                             [sg.Frame('Align Text', layout=commonparam,
+                                       relief='ridge', expand_x=True),],
                              [sg.Text(size=(1,3), expand_y=True)],
                              buttonset,], expand_x=True, expand_y=True ),
            ],
@@ -977,7 +1046,7 @@ def efx(image, p: Param):
            
     src_path = None
     mask_name = 'cal'
-    sample = add_silhouette(bgimg, mask_name, init_fgimg) 
+    sample = impose_mask(bgimg, mask_name, init_fgimg, W, H) 
    
     wn = sg.Window('Inpose Texts', layout=lo)
     busy = False
@@ -1050,7 +1119,6 @@ def efx(image, p: Param):
                 fpath = SysFont_Dir
             else:
                 fpath = fdi.get_folder(init_dir=font_dir)
-            # print(fpath)
             if pa.exists(fpath):
                 busy = True
                 set_gui_disabled(True)
@@ -1058,14 +1126,12 @@ def efx(image, p: Param):
                 threading.Thread(target=retrieve_fontdir, args=(flag, fpath),
                                  daemon=True).start()
                 blink_text(flag)
-            #wn['-falt-'].update(' ')
             continue
         elif ev == '-thread-done-':
             busy = False
             wn['-falt-'].update('')
             nfkeys = flag['fkeys']
             nfdic = flag['fdic']
-            # print(f'-> {len(nfkeys)}')
             if len(nfkeys) > 0:
                 fkeys = nfkeys
                 fdic = nfdic
@@ -1082,33 +1148,28 @@ def efx(image, p: Param):
             continue
         elif ev.startswith('-shp'):
             mask_name = ev[4:-1]
-            #print(f'mask={mask_name}')
 
         scan_va(va, mask_name)
 
-        shift = getto(va, 'shift', shift, 0)
-        alpha = getto(va, 'alpha', alpha, 0, 255)
-        blur = getto(va, 'blur', blur, 0)
+        shift = getval(va['-sshift-'], 'shift', 'shade', default=0)
+        alpha = getval(va['-salpha-'], 'alpha', 'shade', default=0,
+                       lo=0, hi=255)
+        blur = getval(va['-sblur-'], 'blur', 'shade', default=10, lo=0)
+        getval(va['-senbri-'], 'enbri', 'shade', default=0)
 
-        v = stoi(wn['-fsize-'].get(),default=48, lo=8, hi=96)
-        if v is not None:
-            storehist('size', v, 'font')
-        v = stoi(wn['-chalf-'].get(),default=128, lo=0, hi=255)
-        if v is not None:
-            storehist('half', v, 'common')
-        v = stoi(wn['-cspc-'].get(),default=1.3, lo=0.5, hi=2.0)
-        if v is not None:
-            storehist('spc', v, 'common')
-        v = stoi(wn['-clspc-'].get(),default=1.4, lo=0.8, hi=2.0)
-        if v is not None:
-            storehist('lspc', v, 'common')
-        v = stoi(wn['-cmid-'].get(),default=35, lo=0, hi=100)
-        if v is not None:
-            storehist('mid', v, 'common')
-        v = wn['-cpos-'].get()
+        getval(va['-fsize-'], 'size', 'font', default=48, lo=8, hi=288)
+        getval(va['-chalf-'], 'half', 'common', default=128, lo=0, hi=255)
+        getval(va['-cspc-'], 'spc', 'common', default=1.3, lo=0.5, hi=2.0)
+        getval(va['-clspc-'], 'lspc', 'common', default=1.4, lo=0.8, hi=2.0)
+        getval(va['-cxpd-'], 'xpad', 'common', default=32, lo=0)
+        getval(va['-cypd-'], 'ypad', 'common', default=32, lo=0)
+        getval(va['-cmid-'], 'mid', 'common', default=35, lo=0, hi=100)
+        #print(f'va = {va}\nshade = {calendar_preserv["shade"]}\n\n') 
+
+        v = va['-cpos-']
         if v is not None:
             storehist('pos', POS.index(v), 'common')
-        v =  wn['-cgrad-'].get()
+        v =  va['-cgrad-']
         if v is not None:
             storehist('grad', GRADTYPE.index(v), 'common')
 
@@ -1149,8 +1210,7 @@ def efx(image, p: Param):
               fg = init_fgimg
               bg = bgimg
 
-        sample = add_silhouette(bg, mask_name, fg,
-                                shift=shift, alpha=alpha, blur=blur)
+        sample = impose_mask(bg, mask_name, fg, W, H)
         wn['-timg-'].update(sample)
 
         wn.refresh()
