@@ -69,6 +69,7 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 - bauhaus: バウハウスっぽいタイル
 - bias: 斜め帯
 - chevron: ギザギザボーダー
+- curves: 平面充填曲線各種 (hilbert, peanoはこちらに集約)
 - dune: 砂丘？
 - easter: イースター風 たまご 時々 ひよこ
 - emoji: 絵文字(0:敷石 1:螺旋) 
@@ -80,12 +81,10 @@ usage: wallpaper.pyw [-h] [- plugin_dir PLUGI _DIR] [--list_mod les] [--module
 - grass: 芝生シミュレータ
 - hexmap: グラデ六角タイル  color1=whiteの場合6色タイルに
 - hexmaze: 森の六角迷路
-- hilbert: ヒルベルト曲線
 - ivy: ツタ もしくは 植え込み
 - kaleidoscope: 万華鏡 くるくる回すだけでも楽しいかもしれない
 - memphis: メンフィス風グラフィック
 - packingbubble: グラデーション泡充填
-- peano: ペアノ曲線
 - penrose: ペンローズタイル
 - polkadot 水玉模様的な繰り返しパターン
 - scallop: ホタテ貝(緋扇貝かもしれない)
