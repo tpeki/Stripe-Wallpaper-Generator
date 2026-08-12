@@ -8,8 +8,9 @@ import filedialog as fdi
 import inspect
 
 lines_preserv = {'shade':{'shift':2, 'alpha':40, 'blur':5,},
-                 'radial':{'exclude':240, 'freq':120, 'duty':0.3},
-                 'stripe':{'exclude':0, 'pitch':20, 'duty':0.3, 'angle':0},
+                 'radial':{'exclude':240, 'freq':120},
+                 'stripe':{'exclude':0, 'pitch':20, 'angle':0},
+                 'common':{'trans':255, 'duty':0.3},
                  }
 Default_Stripe_Color = (192,192,192)
 
@@ -92,7 +93,7 @@ def reg(*, display=None):
 
 # MASK functions
 @reg(display="Simple Stripes")
-def stripe(W, H, pitch=20, duty=0.4, angle=0.0, exclude=0, cx=None, cy=None):
+def stripe(W, H, pitch=20, angle=0.0, exclude=0, cx=None, cy=None):
     """W,H: 画像サイズ  cx,cy: 中心位置
     exclude: 非描画半径  pitch:周期(px.)  duty: 白黒比  angle: 角度(水平=90)
     """
@@ -105,8 +106,9 @@ def stripe(W, H, pitch=20, duty=0.4, angle=0.0, exclude=0, cx=None, cy=None):
     cy = prevset('cy', cy, 'stripe')
     exclude = prevset('exclude', exclude, 'stripe')
     pitch = prevset('pitch', pitch, 'stripe')
-    duty = prevset('duty', duty, 'stripe')
     angle = prevset('angle', angle, 'stripe')
+    duty = prevset('duty', 0.1, 'common', lo=0.1, hi=1.0)
+    trans = prevset('trans', 255, 'common', lo=0, hi=255)
 
     cx = int(cx*W/100)
     cy = int(cy*H/100)
@@ -139,7 +141,7 @@ def stripe(W, H, pitch=20, duty=0.4, angle=0.0, exclude=0, cx=None, cy=None):
 
 
 @reg(display="Radial Stripes")
-def radial(W, H, freq=120, duty=0.3, exclude=240, cx=None, cy=None):
+def radial(W, H, freq=120, exclude=240, cx=None, cy=None):
     """W,H : 画像サイズ  cx,cy : 中心位置
     exclude: 中心の非描画半径  freq: 周期  duty: 白黒比(0..1,1=全白)"""
 
@@ -152,7 +154,9 @@ def radial(W, H, freq=120, duty=0.3, exclude=240, cx=None, cy=None):
     cy = prevset('cy', cy, 'radial')
     exclude = prevset('exclude', exclude, 'radial')
     freq = prevset('freq', freq, 'radial')
-    duty = prevset('duty', duty, 'radial')
+    duty = prevset('duty', 0.1, 'common', lo=0.1, hi=1.0)
+    trans = prevset('trans', 255, 'common', lo=0, hi=255)
+
     cx = int(cx*W/100)
     cy = int(cy*H/100)
     
@@ -190,6 +194,7 @@ def add_stripe(baseimg, mask, stripeimg):
     shift = prevset('shift', 30, 'shade')  # shift = 30  影のシフト量(pixel)
     alpha = prevset('alpha', 40, 'shade')  # alpha = 90  影の透過度(0-255)
     blur = prevset('blur', 8, 'shade')  # blur = 8    影のぼかし半径(pixel)
+    trans = prevset('trans', 255, 'common')
 
     W, H = baseimg.size
 
@@ -207,15 +212,30 @@ def add_stripe(baseimg, mask, stripeimg):
     shifted_np = np.roll(shadow_np, shift=(shift, shift), axis=(0, 1))
     shadow = Image.fromarray(shifted_np, mode="RGBA")
 
-    stripes = Image.new('RGBA', (W,H), (0,0,0,0))
-    stripes.paste(stripeimg, (0,0), mask)
+    if trans == 255:
+        stripes = Image.new('RGBA', (W,H), (0,0,0,0))
+        stripes.paste(stripeimg, (0,0), mask)
+        
+        # 影合成
+        result = baseimg
+        result = Image.alpha_composite(result, shadow)
+        result = Image.alpha_composite(result, stripes)
+        return result
+        
 
-    # 合成
-    result = baseimg
-    result = Image.alpha_composite(result, shadow)
-    result = Image.alpha_composite(result, stripes)
+    # 前景合成(透明度あり, 影なし)
+    a = trans / 255.0
+    result_np = np.array(baseimg).astype(np.float32)
+    front = np.array(stripeimg).astype(np.float32)
+    mask_np = np.array(mask)
     
-    return result
+    m = (mask_np == 255).astype(np.float32)
+    m4 = m[..., None] * np.ones(4, dtype=np.float32)  # (H,W,4)
+
+    result_np = result_np * (1 - m4 * a) + front * (m4 * a)
+    result_np = result_np.clip(0, 255).astype(np.uint8)
+
+    return Image.fromarray(result_np, mode='RGBA')
 
 
 def plain_image(W, H, base=(192,192,192), baseadd=(64,64,64), contrast=0.0):
@@ -325,6 +345,9 @@ def efx(image, p: Param):
     shift = lines_preserv['shade']['shift']
     alpha = lines_preserv['shade']['alpha']
     blur = lines_preserv['shade']['blur']
+    duty = lines_preserv['common']['duty']
+    trans = lines_preserv['common']['trans']
+
     bgmenu = ['FG', 'BG', 'File', 'Plain']
     bgind = ['*frontimage*', '*internal*', '*file*', '*plain*']
 
@@ -382,9 +405,15 @@ def efx(image, p: Param):
                  sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
                  sg.Button('Cancel', key='-can-', background_color='#ffdddd'),
                  ]
+    commonset = [[sg.Text('Duty'), sg.Input(f'{duty}',key='-duty-',width=4),],
+                 [sg.Text('Trans'), sg.Input(f'{trans}',key='-trns-',width=4),],
+                 [sg.Text('Trans <> Shade', expand_x=True, text_align='right')]
+                 ]
 
     lo = [[sg.Frame(title='Flavor Type', layout=menu_lo,
-                    relief='ridge', expand_x=True)],
+                    relief='ridge', expand_x=True),
+           sg.Frame(title='Common', layout=commonset,
+                    relief='ridge', expand_y=True),],
           [sg.Image(size=preview_size, key='-timg-')],
           [sg.Frame('Stripe Fill', layout=bgset, relief='ridge'),
            sg.Column([[sg.Frame('Shade', layout=shadeset, relief='ridge'),],
@@ -437,6 +466,8 @@ def efx(image, p: Param):
         getval(va['-sshift-'], 'shift', shift, 'shade', lo=0)
         getval(va['-salpha-'], 'alpha', alpha, 'shade', lo=0, hi=255)
         getval(va['-sblur-'], 'blur', blur, 'shade', lo=0)
+        getval(va['-duty-'], 'duty', duty, 'common', lo=0.1)
+        getval(va['-trns-'], 'trans', trans, 'common', lo=0, hi=255)
 
         if va['-bgsel-'] == 'Plain' and bgmode != 'Plain':
             # print('Plain selected')
