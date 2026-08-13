@@ -23,6 +23,7 @@ SysFont_Dir = r'c:\Windows\Fonts'
 Font_Dir = SysFont_Dir
 FONT_EXT=('.ttf', '.otf', '.ttc')  #, '.fon')
 Image_Files = [('PNG','*.png'),('JPG','*.jpg'),('Any','*.*'),]
+Preview_Size = (560,315)
 POS = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se']
 GRADTYPE = ['None', 'Linear', 'Stripe']
 BgMenu = ['FG', 'BG', 'File', 'Plain']
@@ -863,7 +864,7 @@ Dis_List = ['-fdsl-', '-fdfl-','-cgrad-', '-cpos-', '-flst-',
 def efx(image, p: Param):
     global calendar_preserv
     dcpy = copy.deepcopy(calendar_preserv)
-    preview_size = (560,315)
+    preview_size = Preview_Size
     
     W, H = p.width, p.height
     init_fgimg = image if image is not None else plain_image(W,H, swirl=6)    
@@ -944,11 +945,11 @@ def efx(image, p: Param):
         sg.Text(expand_x=True),
         ]
     commonparam = [[sg.Text('BlockSpace', expand_x=True),
-                    sg.Input(f'{cspc}', key='-cspc-', width=4),
-                    sg.Text('X-pad'),
-                    sg.Input(f'{cxpd}', key='-cxpd-', width=4),],
+                    sg.Input(f'{cspc}', key='-cspc-', width=4),],
                    [sg.Text('LineSpace', expand_x=True),
-                    sg.Input(f'{clspc}', key='-clspc-', width=4),
+                    sg.Input(f'{clspc}', key='-clspc-', width=4),],
+                   [sg.Text('X-pad'),
+                    sg.Input(f'{cxpd}', key='-cxpd-', width=4),
                     sg.Text('Y-pad'),
                     sg.Input(f'{cypd}', key='-cypd-', width=4),],
                    [sg.Text(expand_x=True),
@@ -1025,7 +1026,7 @@ def efx(image, p: Param):
               ],
              ]
     buttonset = [
-        sg.Text(' ', expand_x=True),
+        sg.Text(' ', expand_x=True, expand_y=True),
         sg.Button('Test', key='-test-'),
         sg.Button('Ok', key='-ok-', background_color='#ddffdd'),
         sg.Button('Cancel', key='-can-', background_color='#ffdddd'),
@@ -1039,14 +1040,13 @@ def efx(image, p: Param):
                                        relief='ridge', expand_x=True),],
                              [sg.Frame('Align Text', layout=commonparam,
                                        relief='ridge', expand_x=True),],
-                             [sg.Text(size=(1,3), expand_y=True)],
                              buttonset,], expand_x=True, expand_y=True ),
            ],
           ]
            
     src_path = None
     mask_name = 'cal'
-    sample = impose_mask(bgimg, mask_name, init_fgimg, W, H) 
+    sample = impose_mask(bgimg, mask_name, init_fgimg, W, H)
    
     wn = sg.Window('Inpose Texts', layout=lo)
     busy = False

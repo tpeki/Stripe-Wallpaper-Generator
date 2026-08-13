@@ -13,9 +13,8 @@ import inspect
 FN = {}  # 登録先辞書
 shade_preserv = {'shade':{'shift':30, 'alpha':90, 'blur':20, 'adjbri':-80.0},
                  }
-
 File_types = [('PNG','*.png'),('JPG','*.jpg'),('Any','*.*'),]
-    
+Preview_Size = (560,315)
 
 # ==========
 # 関数登録用デコレータ
@@ -697,7 +696,7 @@ def efx(image, p: Param):
     global shade_preserv
     
     dcpy = copy.deepcopy(shade_preserv)
-    preview_size = (640,360)
+    preview_size = Preview_Size
     MASKS = {FN[_]['display']: _ for _ in FN.keys()}
 
     W, H = p.width, p.height
@@ -771,7 +770,10 @@ def efx(image, p: Param):
 
     lo = [[sg.Frame(title='Flavor Type', layout=menu_lo,
                     relief='ridge', expand_x=True)],
-          [sg.Image(size=preview_size, key='-timg-')],
+          [sg.Image(size=preview_size, key='-timg-'),
+           sg.Column([[sg.Button('<',key='-pfold-', text_color='white',
+                                 background_color='#6688cc')],
+                      [sg.Text(expand_y=True)]], expand_y=True)],
           [sg.Frame('Common Shading', layout=shadeset, relief='ridge',
                     expand_x=True)],
           [sg.Frame('Background', layout=bgset, relief='ridge'),
@@ -780,6 +782,7 @@ def efx(image, p: Param):
            
     src_path = None
     mask_name = next(iter(FN))
+    folded = False
 
     sample = add_silhouette(init_fgimg, mask_name, bgimg,
                             shift=shift, alpha=alpha, blur=blur, adjbri=adjbri) 
@@ -816,6 +819,16 @@ def efx(image, p: Param):
             fdi.flush_ev(wn)
         elif ev == '-test-':
             bgmode = None
+        elif ev == '-pfold-':
+            if folded:
+                wn['-timg-'].update(size=preview_size)
+                folded = False
+                wn['-pfold-'].update('<')
+            else:
+                wn['-timg-'].update(size=(192,108))
+                folded = True
+                wn['-pfold-'].update('>')
+            continue
 
         if '-item-' in va:
             if va['-item-'] in FN:
