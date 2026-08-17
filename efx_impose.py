@@ -1,6 +1,6 @@
 from wall_common import *
 import TkEasyGUI as sg
-from PIL import Image, ImageDraw, ImageFont, ImageFilter #, ImageTk, ImageChops
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps #, ImageTk, ImageChops
 import numpy as np
 #import math
 import datetime
@@ -29,14 +29,16 @@ GRADTYPE = ['None', 'Linear', 'Stripe']
 BgMenu = ['FG', 'BG', 'File', 'Plain']
 BgInd = ['*frontimage*', '*internal*', '*file*', '*plain*']
 Mask_Code = {'cal': 'calendar', 'txt': 'text', 'lor': 'lorem'}
+T_FX = ['None', 'Layerd', 'HollowStack']
 
 calendar_preserv = {'shade': {'shift':8, 'alpha':40, 'blur':10, 'enbri':0.0},
                     'font': {'key':None, 'size':64, 'fontdic':{}},
-                    'common': {'pos':2, 'lspc':1.4, 'spc':1.3, 'half':238,
-                               'grad':0, 'mid':35, 'xpad':32, 'ypad':32},
+                    'common': {'pos':8, 'lspc':1.4, 'spc':1.3, 'half':238,
+                               'grad':0, 'mid':35, 'xpad':32, 'ypad':60},
                     'calendar': {'year':2026, 'month':1, 'multi':1,
-                                 'wend':1, 'holi':1},
-                    'text': {'msg1$': '','msg2$': ''},
+                                 'wend':1, 'holi':1, 'tate':0},
+                    'text': {'msg1$': '','msg2$': '',
+                             'effect':0, 'stack':0, 'upper':0},
                     'lorem': {'width':30},
                     }
 
@@ -44,17 +46,17 @@ Init_Color = (48, 128, 192)
 FontList_Size = 8
 ExceptList = ['CRCGHankoin.ttc']  # 読み込み時エラーが発生するFONTファイル
 SP_HOLIDAY = [(2,23)]  # 追加祝日 天皇誕生日など(ハッピーマンデー系はFFS)
-WDAY_INT=0xff
-PADDING=32
-LOREM='Lorem ipsum dolor sit amet, consectetur adipiscing '+\
-      'elit, sed do eiusmod tempor incididunt ut labore et '+\
-      'dolore magna aliqua. Ut enim ad minim veniam, quis '+\
-      'nostrud exercitation ullamco laboris nisi ut aliquip '+\
-      'ex ea commodo consequat. Duis aute irure dolor in '+\
-      'reprehenderit in voluptate velit esse cillum dolore '+\
-      'eu fugiat nulla pariatur. Excepteur sint occaecat '+\
-      'cupidatat non proident, sunt in culpa qui officia '+\
-      'deserunt mollit anim id est laborum.'
+WDAY_INT = 0xff
+PADDING = 32
+LOREM = 'Lorem ipsum dolor sit amet, consectetur adipiscing '+\
+        'elit, sed do eiusmod tempor incididunt ut labore et '+\
+        'dolore magna aliqua. Ut enim ad minim veniam, quis '+\
+        'nostrud exercitation ullamco laboris nisi ut aliquip '+\
+        'ex ea commodo consequat. Duis aute irure dolor in '+\
+        'reprehenderit in voluptate velit esse cillum dolore '+\
+        'eu fugiat nulla pariatur. Excepteur sint occaecat '+\
+        'cupidatat non proident, sunt in culpa qui officia '+\
+        'deserunt mollit anim id est laborum.'
 
 def intro(efxlist: EfxModules, module_name):
     efxlist.add_module(module_name, 'カレンダー貼り付け',
@@ -261,6 +263,7 @@ def calendar_mask():
     multi = prevset('multi', None, 'calendar')
     weekend = prevset('wend', None, 'calendar') == 1
     holiflag = prevset('holi', None, 'calendar') == 1
+    tate = prevset('tate', None, 'calendar') == 1
 
     # font param
     fkey = prevset('key', None, 'font')
@@ -270,16 +273,34 @@ def calendar_mask():
     index = fdic[fkey][4]
     # print(fkey, fdic[fkey])  #####
     # print(calendar_preserv['calendar'], '\n', year, month, holiflag)
+    lspc = prevset('lspc', None, 'common')
+    spc = int(lspc*size)
 
     if 0 < multi < 4:
         # print('caller', year, month, multi)
-        calimg = multi_calendar(year, month, multi, source, index, size,
-                                weekend=weekend, holiday=holiflag)
+        if tate and multi > 1:
+            calimg = multi_calendar(year, month, 1, source, index, size,
+                                    weekend=weekend, holiday=holiflag)
+            for i in range(multi-1):
+                month += 1
+                if month > 12:
+                    month = 1
+                    year += 1
+                addimg = multi_calendar(year, month, 1, source, index, size,
+                                        weekend=weekend, holiday=holiflag)
+                w1,h1 = calimg.size
+                w2,h2 = addimg.size
+                newimg = Image.new('L', (max(w1,w2), h1+h2+spc), 0)
+                newimg.paste(calimg, (0,0))
+                newimg.paste(addimg, (0,h1+spc))
+                calimg = newimg
+        else:
+            calimg = multi_calendar(year, month, multi, source, index, size,
+                                    weekend=weekend, holiday=holiflag)
     elif 3 < multi < 13:
-        lspc = prevset('lspc', None, 'common')
-        spc = int(lspc*size)
 
         wi = int(multi-0.5) // 3
+        #wi = -(-multi // 3)
         calimg = multi_calendar(year, month, 3, source, index, size,
                                 weekend=weekend, holiday=holiflag)
         for j in range(wi):
@@ -301,9 +322,10 @@ def calendar_mask():
         calimg = monthly_calendar(year, month, source, index, size,
                      weekend=True, holiday=True)
 
-    return calimg
+    return calimg.crop(calimg.getbbox())
 
 
+# 複数月横並び生成
 def multi_calendar(year, month, num, fontsrc, index, size,
                    weekend=True, holiday=True):
     """numカ月分の横並びカレンダーユニット"""
@@ -529,6 +551,7 @@ def holiday_map(year):
     return holiday_map
 
 
+# ----------
 # Text
 def text_mask():
     line1 = prevset('msg1$', None, 'text')
@@ -538,19 +561,20 @@ def text_mask():
     # font param
     fkey = prevset('key', None, 'font')
     fdic = prevset('fontdic', None, 'font')
-    size = prevset('size', None, 'font')
+    fsize = prevset('size', None, 'font')
     source = fdic[fkey][3]
     index = fdic[fkey][4]
 
     lspc = prevset('lspc', None, 'common')
-    spc = int(size * lspc)
+    spc = int(fsize * lspc)
     grad = prevset('grad', None, 'common', lo=0)
     mid = prevset('mid', None, 'common', lo=0, hi=100)
     pos = prevset('pos', None, 'common', lo=0, hi=8)
     h_align = pos % 3  # 0:left 1:center 2:right
 
     limgs = []
-    lhlist = []
+    lhtotal = 0
+    spcmax = 0
     maxw = 1
     for ltxt in lines:
         if ltxt == '' or ltxt is None:
@@ -559,11 +583,12 @@ def text_mask():
             else:
                 continue
         # print(f'{ltxt},{ord(ltxt[0])}')
-        limg = text_image(ltxt, source, index=index, size=size, color=WDAY_INT)
+        limg = text_image(ltxt, source, index=index,
+                          size=fsize, color=WDAY_INT)
         dimg = limg.crop(limg.getbbox())
         w1,h1 = limg.size
         if w1 == 0:
-            dimg = Image.new('L',(10,size//4),0)
+            dimg = Image.new('L',(10,fsize//4),0)
             
         if grad == 1:  # gradation linear
             maskpat = linear_line_mask(w1, h1, mid)
@@ -576,12 +601,15 @@ def text_mask():
         img.paste(maskpat, (0,0), dimg)
 
         limgs.append(img)
-        lhlist.append(h1)
+        lhtotal += max(h1+1, spc)
+        spcmax = max(1, spc-h1)
+        #lhlist.append(h1)
         maxw = max(maxw, w1)
 
-    totalh = sum(lhlist)+(len(limgs)-1)*spc
-    
-    img = Image.new('L', (maxw, totalh), 0)
+    #totalh = sum(lhlist)+(len(limgs)-1)*spc
+    #img = Image.new('L', (maxw, totalh), 0)
+
+    img = Image.new('L', (maxw, lhtotal), 0)
     y = 0
     for l in limgs:
         lw, lh = l.size
@@ -592,12 +620,236 @@ def text_mask():
         else:
             x = 0
         img.paste(l, (x,y))
-        y = y+lh+spc
+        y = y+max(lh+1,spc)
 
     img = img.crop(img.getbbox())
-    return img
+    effect = prevset('effect', None, 'text')
+    if effect == 1:
+        stack = prevset('stack', None, 'text', lo=1)  #, hi=12)
+        img = layered_np(img, stack, thickness=11)
+        img = img.crop(img.getbbox())
+        storehist('stack', stack, 'text')
+    if effect == 2:
+        lower = prevset('stack', None, 'text', lo=0)
+        upper = prevset('upper', None, 'text', lo=0)
+        img, img2 = stacker(img, upper, lower, spcmax)
+        return img, img2
+    
+    return img, None  # mask(shadow enable), mask2(non shadow)
 
 
+# layered outline typography
+def old_layered(img, step,thickness=8):
+    #step -= 1
+    base = thick(img, (step+1)*thickness)
+    bw, bh = base.size
+    base_np = np.array(base.convert('L'), dtype=np.uint8)
+    for i in range(step):
+        s = (step - i)*thickness
+        addim = thick(img,s)
+        base = Image.new('L',(bw, bh),0)
+        ix, iy = (bw-addim.width)//2, (bh-addim.height)//2
+        base.paste(addim, (ix, iy))
+        add_np = np.array(base,dtype=np.uint8)
+        base_np = np.bitwise_xor(base_np, add_np)
+
+    base = Image.new('L',(bw, bh),0)
+    ix, iy = (bw-img.width)//2, (bh-img.height)//2
+    base.paste(img, (ix, iy))
+    add_np = np.array(base,dtype=np.uint8)
+    base_np = np.bitwise_xor(base_np, add_np)
+
+    output = Image.fromarray(base_np).convert('L')
+    return output
+
+
+# layered outline typography
+def layered_np(img, step, thickness=8):
+    """layeredのNumPy高速版"""
+    iw, ih = img.size
+
+    # layered() で最初に作られる thick() の幅
+    max_width = (step + 1) * thickness
+    if max_width % 2 == 0:
+        max_width += 1
+
+    # 最外周のthick()と同じサイズのキャンバスを作る
+    bw = iw + max_width * 2
+    bh = ih + max_width * 2
+
+    src = np.asarray(img, dtype=np.uint8)
+
+    # 元画像を最大キャンバスの中央へ配置
+    base = np.zeros((bh, bw), dtype=np.uint8)
+    base[
+        max_width:max_width + ih,
+        max_width:max_width + iw
+    ] = src
+
+    # FIND_EDGES は一度だけ実行
+    edge_img = Image.fromarray(base, mode='L').filter(
+        ImageFilter.FIND_EDGES
+    )
+    edge = np.asarray(edge_img, dtype=np.uint8)
+
+    result = np.zeros((bh, bw), dtype=np.uint8)
+    for i in range(step):
+        width = (step - i) * thickness
+
+        if width % 2 == 0:
+            width += 1
+
+        lw = iw + width * 2 # thick(img, width)サイズ
+        lh = ih + width * 2
+        ix = (bw - lw) // 2
+        iy = (bh - lh) // 2
+
+        # FIND_EDGES済み画像から対応部分取得
+        e = edge[iy:iy + lh, ix:ix + lw]
+
+        contour = _maxfilter_np(e, width)
+        layer = np.maximum(
+            base[iy:iy + lh, ix:ix + lw],
+            contour
+        )
+        result[iy:iy + lh, ix:ix + lw] ^= layer  # XOR
+
+    ix = (bw - iw) // 2
+    iy = (bh - ih) // 2
+    result[iy:iy + ih, ix:ix + iw] ^= src  # 元画像XOR
+
+    return Image.fromarray(result, mode='L')
+        
+
+# 水平方向maxfilter
+def _maxfilter_1d_horizontal(a, size):
+    if size <= 1:
+        return a
+
+    r = size // 2
+    p = np.pad(a, ((0, 0), (r, r)), mode='constant')
+    h, w = p.shape
+    nb = (w + size - 1) // size
+    ww = nb * size
+
+    if ww != w:
+        p = np.pad(p, ((0, 0), (0, ww - w)), mode='constant')
+
+    q = p.reshape(h, nb, size)
+
+    left = np.maximum.accumulate(q, axis=2)
+    right = np.maximum.accumulate(q[..., ::-1],axis=2)[..., ::-1]
+
+    left = left.reshape(h, ww)
+    right = right.reshape(h, ww)
+
+    try:
+        return np.maximum(right[:, :a.shape[1]],
+                          left[:, size - 1:size - 1 + a.shape[1]])
+    except ValueError:
+        return a
+
+
+# 垂直方向maxfilter
+def _maxfilter_1d_vertical(a, size):
+    if size <= 1:
+        return a
+
+    r = size // 2
+    p = np.pad(a, ((r, r), (0, 0)), mode='constant')
+    h, w = p.shape
+    nb = (h + size - 1) // size
+    hh = nb * size
+
+    if hh != h:
+        p = np.pad(p, ((0, hh - h), (0, 0)), mode='constant')
+
+    q = p.reshape(nb, size, w)
+
+    left = np.maximum.accumulate(q, axis=1)
+    right = np.maximum.accumulate(q[:, ::-1, :], axis=1)[:, ::-1, :]
+
+    left = left.reshape(hh, w)
+    right = right.reshape(hh, w)
+
+    try:
+        return np.maximum(right[:a.shape[0], :],
+                          left[size:size+a.shape[0], :])
+    except ValueError:
+        return a
+
+# MaxFilterをnumpyで代替、高速化
+def _maxfilter_np(img, size):
+    """PIL MaxFilter相当の高速NumPy版。"""
+    if size <= 1:
+        return img
+    if size % 2 == 0:
+        size += 1
+    tmp = _maxfilter_1d_horizontal(img, size)
+
+    return _maxfilter_1d_vertical(tmp, size)
+
+
+# stacked typography
+def stacker(img, upper, lower, gap=2):
+    holimg = hollow(img, 3)
+    solimg = thick(img, 3)
+    sw, sh = holimg.size
+    hw, hh = holimg.size
+    fh = (hh+gap)*(upper+lower)+sh+gap
+
+    hol_np = np.array(holimg)
+    sep = np.zeros((gap,hw),dtype=np.uint8)
+    hol2 = np.vstack([hol_np, sep])
+
+    uppart = np.tile(hol2, (upper, 1))
+    lopart = np.tile(hol2, (lower, 1))
+    sol_np = np.array(solimg)
+    
+    back = np.zeros((fh, hw), dtype=np.uint8)
+    back[0:(hh+gap)*upper] = uppart
+    back[(hh+gap)*upper+sh+gap:fh] = lopart
+    back = Image.fromarray(back).convert('L')
+
+    out = np.zeros((fh, hw), dtype=np.uint8)
+    out[(hh+gap)*upper:(hh+gap)*upper+sh] = sol_np
+    out = Image.fromarray(out).convert('L')
+    
+    return out, back    
+    
+
+# thick
+def thick(img, width=3):  # img.mode == 'L'
+    if width % 2 == 0:
+        width += 1
+    iw,ih = img.size
+    newimg = Image.new('L', (iw+width*2, ih+width*2), 0)
+    newimg.paste(img, (width, width))
+    base_np = np.array(newimg)
+    
+    contour = newimg.filter(ImageFilter.FIND_EDGES)
+    if width > 1:
+        contour = contour.filter(ImageFilter.MaxFilter(width))
+    contour_np = np.array(contour)
+
+    or_img = np.maximum(base_np, contour_np) 
+    
+    return Image.fromarray(or_img, mode="L")
+
+# Hollow
+def hollow(img, width=3):  # img.mode == 'L'
+    if width % 2 == 0:
+        width += 1
+    iw,ih = img.size
+    newimg = Image.new('L', (iw+width*2, ih+width*2), 0)
+    newimg.paste(img, (width, width))
+    contour = newimg.filter(ImageFilter.FIND_EDGES)
+    if width > 1:
+        contour = contour.filter(ImageFilter.MaxFilter(width))
+
+    return contour
+
+# ----------
 # Lorem Ipsum
 def lorem_mask():
     lorwidth = prevset('width', None, 'lorem')
@@ -655,8 +907,9 @@ def lorem_mask():
     return img
 
 
-# PROC functions
+# ------------------------------------
 # 前景を切り抜いて影付きで貼る(numpy版)
+# ------------------------------------
 def impose_mask(fgimg, mask_name, bgimg, W=None, H=None):
     """bgimg上にfgimgをmaskで切り出してインポーズする"""
     # shift = 8   影のシフト量(pixel)
@@ -670,10 +923,11 @@ def impose_mask(fgimg, mask_name, bgimg, W=None, H=None):
     if W is None or H is None:
         W, H = fgimg.size
 
+    mask2 = None
     if mask_name == 'cal':
         mask = calendar_mask()
     elif mask_name == 'txt':
-        mask = text_mask()
+        mask, mask2 = text_mask()
     elif mask_name == 'lor':
         mask = lorem_mask()
     else:
@@ -698,9 +952,15 @@ def impose_mask(fgimg, mask_name, bgimg, W=None, H=None):
     fg = Image.composite(fgimg, Image.new('RGBA', (W, H), (0, 0, 0, 0)), mask)
     if enbright != 0.0:
         fg = adjust_brightness(fg, enbright)
+    if mask2 is not None:
+        mask2 = allocate_img(W, H, mask2)
+        mask2 = Image.composite(fgimg, Image.new('RGBA', (W, H), (0, 0, 0, 0)),
+                                mask2)
 
     # 合成
     result = bgimg.convert('RGBA')
+    if mask2 is not None:
+        result = Image.alpha_composite(result, mask2)
     result = Image.alpha_composite(result, shadow)
     result = Image.alpha_composite(result, fg)
 
@@ -907,9 +1167,13 @@ def efx(image, p: Param):
     storehist('month', month, 'calendar')
     calwend = prevset('wend', None, 'calendar')
     calholi = prevset('holi', None, 'calendar')
+    caltate = prevset('tate', None, 'calendar')
 
     txtmsg1 = prevset('msg1$', None, 'text')
     txtmsg2 = prevset('msg2$', None, 'text')
+    txteffect = prevset('effect', None, 'text')
+    txtstack = prevset('stack', None, 'text')
+    txtupper = prevset('upper', None, 'text')
 
     lorwidth = prevset('width', None, 'lorem')
 
@@ -973,17 +1237,27 @@ def efx(image, p: Param):
                           [sg.Checkbox('WeekEnd', key='-calwend-',
                                        default=(calwend==1)),
                            sg.Checkbox('Holiday', key='-calholi-',
-                                       default=(calholi==1)),]]),
+                                       default=(calholi==1)),
+                           sg.Checkbox('Vertical', key='-caltate-',
+                                       default=(caltate==1)),]]),
         ]
-    txtparam = [
-        sg.Radio('', group_id='-shpg-', default=False,
-                 key='-shptxt-', enable_events=True),
-        sg.Text('Text', size=(9,1)),
-        sg.Column(layout=[[sg.Text('Line 1'),
-                           sg.Input(txtmsg1, key='-txtmsg1$-', width=30),],
-                          [sg.Text('Line 2'),
-                           sg.Input(txtmsg2, key='-txtmsg2$-', width=30),]]),
-        ]
+    txtparam = [sg.Radio('', group_id='-shpg-', default=False,
+                         key='-shptxt-', enable_events=True),
+                sg.Text('Text', size=(9,1)),
+                sg.Column([[sg.Text('Line 1'),
+                            sg.Input(txtmsg1, key='-txtmsg1$-', width=30),],
+                           [sg.Text('Line 2'),
+                            sg.Input(txtmsg2, key='-txtmsg2$-', width=30),],
+                           [sg.Combo(T_FX, key='-t_efx-', readonly=True,
+                                     default_value=T_FX[txteffect], width=12),
+                            sg.Text('Stack'),
+                            sg.Input(txtstack,key='-txtstack-',width=3),
+                            sg.Text('Upper'),
+                            sg.Input(txtupper,key='-txtupper-',width=3),
+                            sg.Text(expand_x=True)
+                            ]
+                           ]),
+                ]
     lorparam = [
         sg.Radio('', group_id='-shpg-', default=False,
                  key='-shplor-', enable_events=True),
@@ -1172,6 +1446,9 @@ def efx(image, p: Param):
         v =  va['-cgrad-']
         if v is not None:
             storehist('grad', GRADTYPE.index(v), 'common')
+        v = va['-t_efx-']
+        if v is not None:
+            storehist('effect', T_FX.index(v), 'text')
 
         if va['-bgsel-'] == 'Plain' and bgmode != 'Plain':
             # print('Plain selected')
@@ -1227,3 +1504,8 @@ if __name__ == "__main__":
     img = efx(None, p)
     if img is not None:
         img.show()
+
+    fk,fd = make_font_dic(Font_Dir)
+    storehist('key', fk[0], 'font')
+    storehist('fontdic', fd, 'font')
+    storehist('msg1$','TestTest Test', 'text')
