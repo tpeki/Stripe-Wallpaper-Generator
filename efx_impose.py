@@ -2,18 +2,15 @@ from wall_common import *
 import TkEasyGUI as sg
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps #, ImageTk, ImageChops
 import numpy as np
-#import math
 import datetime
 import copy
 import io
 import os
 import os.path as pa
 import filedialog as fdi
-#import inspect
 import calendar
 import textwrap
 import tkinter as tk
-#from tkinter import filedialog
 from fontTools.ttLib import TTFont
 import glob
 import zipfile
@@ -30,9 +27,13 @@ BgMenu = ['FG', 'BG', 'File', 'Plain']
 BgInd = ['*frontimage*', '*internal*', '*file*', '*plain*']
 Mask_Code = {'cal': 'calendar', 'txt': 'text', 'lor': 'lorem'}
 T_FX = ['None', 'Layerd', 'HollowStack']
+Init_Color = (48, 128, 192)
 
-calendar_preserv = {'shade': {'shift':8, 'alpha':40, 'blur':10, 'enbri':0.0},
-                    'font': {'key':None, 'size':64, 'fontdic':{}},
+calendar_preserv = {'shade': {'shift':8, 'alpha':40, 'blur':10, 'enbri':0.0,
+                              'color':(0,0,0)},
+                    'font': {'key':None, 'size':64, 'fontdic':{},
+                             'fontdir': Font_Dir},
+                    'plain': {'color': Init_Color, 'jit':63},
                     'common': {'pos':8, 'lspc':1.4, 'spc':1.3, 'half':238,
                                'grad':0, 'mid':35, 'xpad':32, 'ypad':60},
                     'calendar': {'year':2026, 'month':1, 'multi':1,
@@ -40,12 +41,27 @@ calendar_preserv = {'shade': {'shift':8, 'alpha':40, 'blur':10, 'enbri':0.0},
                     'text': {'msg1$': '','msg2$': '',
                              'effect':0, 'stack':0, 'upper':0},
                     'lorem': {'width':30},
-                    }
+                     }
 
-Init_Color = (48, 128, 192)
+Alert_Color = '#772222'
 FontList_Size = 8
 ExceptList = ['CRCGHankoin.ttc']  # 読み込み時エラーが発生するFONTファイル
-SP_HOLIDAY = [(2,23)]  # 追加祝日 天皇誕生日など(ハッピーマンデー系はFFS)
+SP_HOLIDAY = [(1, 1),   # 元日
+              (2, 11),  # 建国記念の日
+              (2, 23),  # 天皇誕生日
+              (4, 29),  # 昭和の日
+              (5, 3),   # 憲法記念日
+              (5, 4),   # みどりの日
+              (5, 5),   # こどもの日
+              (8, 11),  # 山の日
+              (11, 3),  # 文化の日
+              (11, 23), # 勤労感謝の日
+              ]
+HM_HOLIDAY =[(1, 2),  # 成人の日
+             (7, 3),  # 海の日
+             (9, 3),  # 敬老の日
+             (10, 2), # スポーツの日
+             ]
 WDAY_INT = 0xff
 PADDING = 32
 LOREM = 'Lorem ipsum dolor sit amet, consectetur adipiscing '+\
@@ -69,7 +85,7 @@ def intro(efxlist: EfxModules, module_name):
 
 # 保存パラメータがあれば返す
 # =========================
-def prevset(name, default, funcname, lo=None, hi=None):
+def prevset(name, funcname, default=None, lo=None, hi=None):
     retv = calendar_preserv.get(funcname, {}).get(name, default)
     
     if lo is not None:
@@ -80,7 +96,7 @@ def prevset(name, default, funcname, lo=None, hi=None):
     return retv
 
 
-def storehist(name, value, funcname):
+def storehist(name, funcname, value):
     if calendar_preserv.get(funcname,None) is None:
         calendar_preserv[funcname] = {}
     calendar_preserv[funcname][name] = value
@@ -258,22 +274,22 @@ def text_image(text, source, index=0, size=48, color=255):
 # Calendar
 def calendar_mask():
     # calendar param
-    year = prevset('year', None, 'calendar')
-    month = prevset('month', None, 'calendar')
-    multi = prevset('multi', None, 'calendar')
-    weekend = prevset('wend', None, 'calendar') == 1
-    holiflag = prevset('holi', None, 'calendar') == 1
-    tate = prevset('tate', None, 'calendar') == 1
+    year = prevset('year', 'calendar')
+    month = prevset('month', 'calendar')
+    multi = prevset('multi', 'calendar')
+    weekend = prevset('wend', 'calendar') == 1
+    holiflag = prevset('holi', 'calendar') == 1
+    tate = prevset('tate', 'calendar') == 1
 
     # font param
-    fkey = prevset('key', None, 'font')
-    fdic = prevset('fontdic', None, 'font')
-    size = prevset('size', None, 'font')
+    fkey = prevset('key', 'font')
+    fdic = prevset('fontdic', 'font')
+    size = prevset('size', 'font')
     source = fdic[fkey][3]
     index = fdic[fkey][4]
     # print(fkey, fdic[fkey])  #####
     # print(calendar_preserv['calendar'], '\n', year, month, holiflag)
-    lspc = prevset('lspc', None, 'common')
+    lspc = prevset('lspc', 'common')
     spc = int(lspc*size)
 
     if 0 < multi < 4:
@@ -329,7 +345,7 @@ def calendar_mask():
 def multi_calendar(year, month, num, fontsrc, index, size,
                    weekend=True, holiday=True):
     """numカ月分の横並びカレンダーユニット"""
-    dspc = prevset('spc', None, 'common')
+    dspc = prevset('spc', 'common')
     spc = int(dspc*size)
     
     calimg = monthly_calendar(year, month, fontsrc, index, size,
@@ -357,11 +373,11 @@ def monthly_calendar(year, month, fontsrc, index, size,
                      weekend=True, holiday=True):
     """1カ月分のカレンダーユニット"""
     
-    half = prevset('half', None, 'common')
-    dspc = prevset('spc', None, 'common')
-    lspc = prevset('lspc', None, 'common')
-    grad = prevset('grad', None, 'common', lo=0)
-    mid = prevset('mid', None, 'common', lo=0, hi=100)
+    half = prevset('half', 'common')
+    dspc = prevset('spc', 'common')
+    lspc = prevset('lspc', 'common')
+    grad = prevset('grad', 'common', lo=0)
+    mid = prevset('mid', 'common', lo=0, hi=100)
 
     body = calendar_body(year, month)
     if holiday:
@@ -503,15 +519,8 @@ def holiday_map(year):
     holidays = []
 
     # 固定祝日
-    holidays.append(datetime.date(year, 1, 1))   # 元日
-    holidays.append(datetime.date(year, 2, 11))  # 建国記念の日
-    holidays.append(datetime.date(year, 4, 29))  # 昭和の日
-    holidays.append(datetime.date(year, 5, 3))   # 憲法記念日
-    holidays.append(datetime.date(year, 5, 4))   # みどりの日
-    holidays.append(datetime.date(year, 5, 5))   # こどもの日
-    holidays.append(datetime.date(year, 8, 11))  # 山の日
-    holidays.append(datetime.date(year, 11, 3))  # 文化の日
-    holidays.append(datetime.date(year, 11, 23)) # 勤労感謝の日
+    for sp in SP_HOLIDAY:
+        holidays.append(datetime.date(year, *sp))
 
     # 春分・秋分
     holidays.append(datetime.date(year, 3, shunbun(year)))
@@ -524,13 +533,9 @@ def holiday_map(year):
             d += datetime.timedelta(days=1)
         return d + datetime.timedelta(days=7*(n-1))
 
-    holidays.append(nth_monday(1, 2))  # 成人の日
-    holidays.append(nth_monday(7, 3))  # 海の日
-    holidays.append(nth_monday(9, 3))  # 敬老の日
-    holidays.append(nth_monday(10, 2)) # スポーツの日
+    for hm in HM_HOLIDAY:
+        holidays.append(nth_monday(*hm))
 
-    for sp in SP_HOLIDAY:
-        holidays.append(datetime.date(year, sp[0], sp[1]))
 
     # 国民の休日
     holidays += kokumin_no_kyujitsu(holidays)
@@ -554,22 +559,22 @@ def holiday_map(year):
 # ----------
 # Text
 def text_mask():
-    line1 = prevset('msg1$', None, 'text')
-    line2 = prevset('msg2$', None, 'text')
+    line1 = prevset('msg1$', 'text')
+    line2 = prevset('msg2$', 'text')
     lines = [line1, line2]
 
     # font param
-    fkey = prevset('key', None, 'font')
-    fdic = prevset('fontdic', None, 'font')
-    fsize = prevset('size', None, 'font')
+    fkey = prevset('key', 'font')
+    fdic = prevset('fontdic', 'font')
+    fsize = prevset('size', 'font')
     source = fdic[fkey][3]
     index = fdic[fkey][4]
 
-    lspc = prevset('lspc', None, 'common')
+    lspc = prevset('lspc', 'common')
     spc = int(fsize * lspc)
-    grad = prevset('grad', None, 'common', lo=0)
-    mid = prevset('mid', None, 'common', lo=0, hi=100)
-    pos = prevset('pos', None, 'common', lo=0, hi=8)
+    grad = prevset('grad', 'common', lo=0)
+    mid = prevset('mid', 'common', lo=0, hi=100)
+    pos = prevset('pos', 'common', lo=0, hi=8)
     h_align = pos % 3  # 0:left 1:center 2:right
 
     limgs = []
@@ -623,15 +628,15 @@ def text_mask():
         y = y+max(lh+1,spc)
 
     img = img.crop(img.getbbox())
-    effect = prevset('effect', None, 'text')
+    effect = prevset('effect', 'text')
     if effect == 1:
-        stack = prevset('stack', None, 'text', lo=1)  #, hi=12)
+        stack = prevset('stack', 'text', lo=1)  #, hi=12)
         img = layered_np(img, stack, thickness=11)
         img = img.crop(img.getbbox())
-        storehist('stack', stack, 'text')
+        storehist('stack', 'text', stack)
     if effect == 2:
-        lower = prevset('stack', None, 'text', lo=0)
-        upper = prevset('upper', None, 'text', lo=0)
+        lower = prevset('stack', 'text', lo=0)
+        upper = prevset('upper', 'text', lo=0)
         img, img2 = stacker(img, upper, lower, spcmax)
         return img, img2
     
@@ -687,9 +692,7 @@ def layered_np(img, step, thickness=8):
     ] = src
 
     # FIND_EDGES は一度だけ実行
-    edge_img = Image.fromarray(base, mode='L').filter(
-        ImageFilter.FIND_EDGES
-    )
+    edge_img = Image.fromarray(base, mode='L').filter(ImageFilter.FIND_EDGES)
     edge = np.asarray(edge_img, dtype=np.uint8)
 
     result = np.zeros((bh, bw), dtype=np.uint8)
@@ -852,20 +855,20 @@ def hollow(img, width=3):  # img.mode == 'L'
 # ----------
 # Lorem Ipsum
 def lorem_mask():
-    lorwidth = prevset('width', None, 'lorem')
+    lorwidth = prevset('width', 'lorem')
     lines = textwrap.wrap(LOREM, lorwidth)
 
     # font param
-    fkey = prevset('key', None, 'font')
-    fdic = prevset('fontdic', None, 'font')
-    size = prevset('size', None, 'font')
+    fkey = prevset('key', 'font')
+    fdic = prevset('fontdic', 'font')
+    size = prevset('size', 'font')
     source = fdic[fkey][3]
     index = fdic[fkey][4]
 
-    lspc = prevset('lspc', None, 'common')
-    grad = prevset('grad', None, 'common', lo=0)
-    mid = prevset('mid', None, 'common', lo=0, hi=100)
-    pos = prevset('pos', None, 'common', lo=0, hi=8)
+    lspc = prevset('lspc', 'common')
+    grad = prevset('grad', 'common', lo=0)
+    mid = prevset('mid', 'common', lo=0, hi=100)
+    pos = prevset('pos', 'common', lo=0, hi=8)
     h_align = pos % 3  # 0:left 1:center 2:right
 
     limgs = []
@@ -915,10 +918,15 @@ def impose_mask(fgimg, mask_name, bgimg, W=None, H=None):
     # shift = 8   影のシフト量(pixel)
     # alpha = 40  影の透過度(0-255)
     # blur = 10   影のぼかし半径(pixel)
-    shift = prevset('shift', 8, 'shade')
-    alpha = prevset('alpha', 40, 'shade')
-    blur = prevset('blur', 10, 'shade')
-    enbright = prevset('enbri', 0, 'shade')
+    shift = prevset('shift', 'shade', 8)
+    alpha = prevset('alpha', 'shade', 40)
+    blur = prevset('blur', 'shade', 10)
+    enbright = prevset('enbri', 'shade', 0)
+    scolor = prevset('color', 'shade')
+    if not isinstance(scolor, tuple):
+        scolor = (0,0,0,0)
+    else:
+        scolor = tuple((scolor[:3]+(0, 0, 0))[:3]+(alpha,))
 
     if W is None or H is None:
         W, H = fgimg.size
@@ -936,34 +944,42 @@ def impose_mask(fgimg, mask_name, bgimg, W=None, H=None):
     mask = allocate_img(W, H, mask)
 
     # 影
-    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    shadow.paste((0, 0, 0, alpha), mask=mask)
-    shadow = shadow.filter(ImageFilter.GaussianBlur(blur))
-
-    # 周期シフト
     dx = shift
     dy = shift
 
+    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    mask_np = np.array(mask)
+    mask_np = (mask_np > 0).astype(np.uint8) *255
+    shadow.paste(scolor, mask=Image.fromarray(mask_np))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(blur))
+
+    # 周期シフト
     shadow_np = np.array(shadow.convert('RGBA'))
     shifted_np = np.roll(shadow_np, shift=(dy, dx), axis=(0, 1))
     shadow = Image.fromarray(shifted_np, mode='RGBA')
 
     # マスクで切り抜き
-    fg = Image.composite(fgimg, Image.new('RGBA', (W, H), (0, 0, 0, 0)), mask)
     if enbright != 0.0:
         fg = adjust_brightness(fg, enbright)
-    if mask2 is not None:
-        mask2 = allocate_img(W, H, mask2)
-        mask2 = Image.composite(fgimg, Image.new('RGBA', (W, H), (0, 0, 0, 0)),
-                                mask2)
 
-    # 合成
     result = bgimg.convert('RGBA')
     if mask2 is not None:
+        mask2 = allocate_img(W, H, mask2)
         result = Image.alpha_composite(result, mask2)
     result = Image.alpha_composite(result, shadow)
-    result = Image.alpha_composite(result, fg)
+        
+    bg_np = np.array(result, dtype=np.float32)
+    fg_np = np.array(fgimg.convert('RGBA'), dtype=np.float32)
+    mask_np = np.array(mask, dtype=np.float32) / 255.0  # 0〜1
 
+    # mask をアルファとして使う
+    a = mask_np[..., None]  # (H,W,1)
+
+    # アルファブレンド
+    out = bg_np * (1 - a) + fg_np * a
+    out = np.clip(out, 0, 255).astype(np.uint8)
+
+    result = Image.fromarray(out, mode='RGBA')
     return result
 
 
@@ -973,9 +989,9 @@ def allocate_img(W,H, img):
         img = img.convert('L')
 
     iw, ih = img.size
-    xpad = prevset('xpad', None, 'common', lo=0)
-    ypad = prevset('ypad', None, 'common', lo=0)
-    imgpos = prevset('pos', None, 'common', lo=0, hi=8)
+    xpad = prevset('xpad', 'common', lo=0)
+    ypad = prevset('ypad', 'common', lo=0)
+    imgpos = prevset('pos', 'common', lo=0, hi=8)
 
     if (imgpos // 3) == 2:  # south
         iy = H - ih - ypad
@@ -1096,7 +1112,7 @@ def scan_va(va, mask_name):
             else:
                 val = stoi(val)
             # print(param, '=', val)
-            storehist(param, val, Mask_Code[mask_name])
+            storehist(param, Mask_Code[mask_name], val)
     return
 
     
@@ -1104,7 +1120,7 @@ def getval(elemval, name, cat, default=None, lo=None, hi=None):
     """elementの値(文字列)を数値化して保存"""
     v = stoi(elemval, default, lo, hi)
     if v is not None:
-        storehist(name, v, cat)
+        storehist(name, cat, v)
     return v
 
 
@@ -1136,55 +1152,65 @@ def efx(image, p: Param):
     file_image = None
 
     # default Bacic Params
-    shift = prevset('shift', None, 'shade')
-    alpha = prevset('alpha', None, 'shade')
-    blur = prevset('blur', None, 'shade')
-    enbri = prevset('enbri', None, 'shade')
+    shift = prevset('shift', 'shade')
+    alpha = prevset('alpha', 'shade')
+    blur = prevset('blur', 'shade')
+    enbri = prevset('enbri', 'shade')
+    scolor = prevset('color', 'shade')
+    sfgc, sbgc = bg_and_font(scolor)
 
-    base = Init_Color
-    addv = 255 - max(base)
+    base = prevset('color', 'plain')
+    addv = prevset('jit', 'plain')
     fgc, bgc = bg_and_font(base)
-    bgimg = plain_image(W,H, base=base, baseadd=(addv,addv,addv))
+    init_pimg = plain_image(W,H, base=base, baseadd=(addv,addv,addv))
+    init_bgimg = p.bg(W,H)
+    bgimg = init_pimg
     bgfile = BgInd[3]
     bgmode = BgMenu[3]
 
-    init_bgimg = p.bg(W,H)
- 
-    font_dir = Font_Dir  # 初期フォントディレクトリ
-    fkeys, fdic = make_font_dic(font_dir)
-    if len(fkeys) == 0:
-        fkeys, fdic = make_font_dic(SysFont_Dir)
-    storehist('key', fkeys[0], 'font')
-    storehist('fontdic', fdic, 'font')
-    fsize = prevset('size', None, 'font')
+    ffont = prevset('key', 'font')
+    fdic = prevset('fontdic', 'font')
+    font_dir = prevset('fontdir', 'font')
+    if len(fdic) == 0 or fdic is None: 
+        font_dir = Font_Dir  # 初期フォントディレクトリ
+        fkeys, fdic = make_font_dic(font_dir)
+        if len(fkeys) == 0:
+            font_dir = SysFont_Dir
+            fkeys, fdic = make_font_dic(font_dir)
+        ffont = fkeys[0]
+        storehist('key', 'font', ffont)
+        storehist('fontdic', 'font', fdic)
+        storehist('fontdir', 'font', font_dir)
+    fkeys = list(fdic.keys())
+    fsize = prevset('size', 'font')
 
     # fdic["jp_family|face"] = [jp_family, face, family, source, idx]
 
     t = datetime.date.today()
     year = t.year
     month = t.month
-    storehist('year', year, 'calendar')
-    storehist('month', month, 'calendar')
-    calwend = prevset('wend', None, 'calendar')
-    calholi = prevset('holi', None, 'calendar')
-    caltate = prevset('tate', None, 'calendar')
+    storehist('year', 'calendar', year)
+    storehist('month', 'calendar', month)
+    calwend = prevset('wend', 'calendar')
+    calholi = prevset('holi', 'calendar')
+    caltate = prevset('tate', 'calendar')
 
-    txtmsg1 = prevset('msg1$', None, 'text')
-    txtmsg2 = prevset('msg2$', None, 'text')
-    txteffect = prevset('effect', None, 'text')
-    txtstack = prevset('stack', None, 'text')
-    txtupper = prevset('upper', None, 'text')
+    txtmsg1 = prevset('msg1$', 'text')
+    txtmsg2 = prevset('msg2$', 'text')
+    txteffect = prevset('effect', 'text')
+    txtstack = prevset('stack', 'text')
+    txtupper = prevset('upper', 'text')
 
-    lorwidth = prevset('width', None, 'lorem')
+    lorwidth = prevset('width', 'lorem')
 
-    chalf = prevset('half', None, 'common')
-    cspc = prevset('spc', None, 'common')
-    clspc = prevset('lspc', None, 'common')
-    cmid = prevset('mid', None, 'common')
-    cpos = prevset('pos', None, 'common')
-    cgrad = prevset('grad', None, 'common')
-    cxpd = prevset('xpad', None, 'common')
-    cypd = prevset('ypad', None, 'common')
+    chalf = prevset('half', 'common')
+    cspc = prevset('spc', 'common')
+    clspc = prevset('lspc', 'common')
+    cmid = prevset('mid', 'common')
+    cpos = prevset('pos', 'common')
+    cgrad = prevset('grad', 'common')
+    cxpd = prevset('xpad', 'common')
+    cypd = prevset('ypad', 'common')
     
      
     # UI panel                
@@ -1193,7 +1219,8 @@ def efx(image, p: Param):
                 sg.Button('Sys', key='-fdfl-'),],
                [sg.Listbox(fkeys, key='-flst-', size=(35,FontList_Size),
                            enable_events=True),],
-               [sg.Text('', key='-falt-', text_color='#772222'),],
+               [],
+               [sg.Text(ffont, key='-falt-', text_color='black'),],
                ]
     fontextparam = [
         sg.Text('Size'),
@@ -1276,11 +1303,14 @@ def efx(image, p: Param):
 
     shadeset = [[sg.Text('Shift='),
                  sg.Input(f'{shift}', key='-sshift-', width=4),
-                 sg.Text(' ', expand_x=True),],
-                [sg.Text('Blur='),
+                 sg.Text('Blur='),
                  sg.Input(f'{blur}', key='-sblur-', width=4),],
                 [sg.Text('Intent'),
-                 sg.Input(f'{alpha}', key='-salpha-', width=4),],
+                 sg.Input(f'{alpha}', key='-salpha-', width=4),
+                 sg.Text('Color'),
+                 sg.Button('...', text_color=sfgc, background_color=sbgc,
+                           key='-scolor-', width=3),
+                 ],
                 [],
                 [sg.Text('Fg-Enbright'),
                  sg.Input(f'{enbri}', key='-senbri-', width=4),],
@@ -1333,6 +1363,7 @@ def efx(image, p: Param):
 
         current = wn['-falt-'].get()
         wn['-falt-'].update('' if current else 'Processing...')
+        wn['-falt-'].update(text_color=Alert_Color)
         wn.refresh()
 
         wn['-falt-'].widget.after(300, blink_text, flag)
@@ -1369,7 +1400,7 @@ def efx(image, p: Param):
                 file_image = Image.open(src_path).convert('RGBA')
                 file_image = file_image.resize((W,H), resample=Image.LANCZOS)
                 va['-bgsel-'] = 'File'
-                bgmode = None
+                # bgmode = None
             fdi.flush_ev(wn)
         elif ev == '-bgc-':
             base = to_rgb(sg.popup_color('Select Base Color',
@@ -1379,6 +1410,13 @@ def efx(image, p: Param):
             va['-bgsel-'] = 'Plain'
             bgmode = None
             fdi.flush_ev(wn)
+        elif ev == '-scolor-':
+            scolor = to_rgb(sg.popup_color('Select Shade Color',
+                                       default_color=scolor))
+            sfgc, sbgc = bg_and_font(scolor)
+            wn['-scolor-'].update(background_color=sbgc, text_color=sfgc)
+            storehist('color', 'shade', scolor)
+            fdi.flush_ev(wn)
         elif ev == '-test-':
             bgmode = None
         elif ev == '-flst-':
@@ -1386,8 +1424,9 @@ def efx(image, p: Param):
             if len(v) != 1:  # Listboxの値はlistで返る
                 continue
             if v[0] in fdic:
-                storehist('key', v[0], 'font')
-                fkey = v
+                ffont = v[0]
+                storehist('key', 'font', ffont)
+                wn['-falt-'].update(ffont)
         elif ev == '-fdsl-' or ev == '-fdfl-':
             if ev == '-fdfl-':
                 fpath = SysFont_Dir
@@ -1403,23 +1442,26 @@ def efx(image, p: Param):
             continue
         elif ev == '-thread-done-':
             busy = False
-            wn['-falt-'].update('')
+            wn['-falt-'].update('', text_color='black')
+            
             nfkeys = flag['fkeys']
             nfdic = flag['fdic']
             if len(nfkeys) > 0:
                 fkeys = nfkeys
                 fdic = nfdic
                 font_dir = fpath
-                storehist('key', fkeys[0], 'font')
-                storehist('fontdic', fdic, 'font')
+                ffont = fkeys[0]
+                storehist('key', 'font', ffont)
+                storehist('fontdic', 'font', fdic)
+                storehist('fontdir', 'font', font_dir)
                 set_gui_disabled(False, ['-fdir-','-flst-'])
                 wn['-fdir-'].update(f'Fonts ({font_dir})')
                 wn['-flst-'].update(values=fkeys)
+                wn['-falt-'].update(ffont)
             wn.refresh()
             fdi.flush_ev(wn)
             set_gui_disabled(False)
             flag['done'] = True
-            continue
         elif ev.startswith('-shp'):
             mask_name = ev[4:-1]
 
@@ -1442,25 +1484,33 @@ def efx(image, p: Param):
 
         v = va['-cpos-']
         if v is not None:
-            storehist('pos', POS.index(v), 'common')
+            storehist('pos', 'common', POS.index(v))
         v =  va['-cgrad-']
         if v is not None:
-            storehist('grad', GRADTYPE.index(v), 'common')
+            storehist('grad', 'common', GRADTYPE.index(v))
         v = va['-t_efx-']
         if v is not None:
-            storehist('effect', T_FX.index(v), 'text')
+            storehist('effect', 'text', T_FX.index(v))
 
-        if va['-bgsel-'] == 'Plain' and bgmode != 'Plain':
+        if va['-bgsel-'] == 'Plain':
             # print('Plain selected')
-            bgmode = 'Plain'
-            wn['-fn1-'].update(BgInd[3])
-            addv = stoi(va['-badd-'])
-            bgimg = plain_image(W, H, base=base, baseadd=(addv,addv,addv))
+            if bgmode != 'Plain':
+                bgmode = 'Plain'
+                wn['-fn1-'].update(BgInd[3])
+                addv = stoi(va['-badd-'])
+                init_pimg = plain_image(W, H, base=base,
+                                        baseadd=(addv,addv,addv))
+            bgimg = init_pimg
         elif va['-bgsel-'] == 'File':
             # print('File selected')
-            if file_image is not None and bgmode != 'File':
-                bgmode = 'File'
-                wn['-fn1-'].update(bgfile)
+            if bgmode != 'File':
+                if file_image is not None:
+                    bgmode = 'File'
+                    wn['-fn1-'].update(bgfile)
+                    bgimg = file_image
+                else:
+                    wn['-bgsel-'].update(bgmode)
+            else:
                 bgimg = file_image
         elif va['-bgsel-'] == 'BG':
             # print('BG selected')
@@ -1471,14 +1521,20 @@ def efx(image, p: Param):
                     bgimg = init_bgimg
                 else:
                     wn['-bgsel-'].update(bgmode)
+            else:
+                bgimg = init_bgimg
         elif va['-bgsel-'] == 'FG':  # and bgmode != 'FG':
             # print('FG selected')
-            bgmode = 'FG'
-            wn['-fn1-'].update(BgInd[0])
+            if bgmode != 'FG':
+                bgmode = 'FG'
+                wn['-fn1-'].update(BgInd[0])
+            else:
+                wn['-bgsel-'].update(bgmode)
             bgimg = init_fgimg
 
         wn['-bgsel-'].update(bgmode)
-        wn['-falt-'].update('')
+        storehist('color', 'plain', to_rgb(base))
+        storehist('jit', 'plain', addv)
                 
         if va['-swap-']:
               bg = init_fgimg
@@ -1506,6 +1562,6 @@ if __name__ == "__main__":
         img.show()
 
     fk,fd = make_font_dic(Font_Dir)
-    storehist('key', fk[0], 'font')
-    storehist('fontdic', fd, 'font')
-    storehist('msg1$','TestTest Test', 'text')
+    storehist('key', 'font', fk[0])
+    storehist('fontdic', 'font', fd)
+    storehist('msg1$', 'text','TestTest Test')
