@@ -10,6 +10,7 @@ Pythonのライブラリとして、標準ライブラリ以外に以下のも�
 - pillow  (12.0.0)
 - TkEasyGUI  (1.0.40)
 - numpy (2.2.6)
+- fonttools  (4.63.0) ※ efx_imposeモジュール使用時
 
 ## 利用方法
 一式を同じディレクトリに配置し、pythonにパスが通っている環境で wallpaper.pyw スクリプトを起動してください。
@@ -160,7 +161,7 @@ KujiraHandさん、使いやすくて柔軟なTkEasyGUIをありがとう。こ�
 
 samplesの下に各モジュールを使ったサンプル画像を置きました。デフォルトパラメータをいじって保存したものなので、参考まで。
 
-![stripe](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/stripe.png)![HexMaze](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/hexmaze.png) ![Penrose](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/penrose.png)
+![stripe](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/stripe+impose.png)![HexMaze](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/hexmaze.png) ![Penrose](https://github.com/tpeki/Stripe-Wallpaper-Generator/blob/main/samples/penrose.png)
 
 画像サンプルとともに、tartanのサンプルセットも置いてあります。セットパターンファイル(*.ttn)は、mod_tartan のセットパターンエディタで読み込んでください。
 
