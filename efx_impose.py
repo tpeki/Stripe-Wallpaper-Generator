@@ -23,6 +23,7 @@ FONT_EXT=('.ttf', '.otf', '.ttc')  #, '.fon')
 Font_Dic = {}
 ExceptList = ['CRCGHankoin.ttc']  # 読み込み時エラーが発生するFONTファイル
 Image_Files = [('PNG','*.png'),('JPG','*.jpg'),('Any','*.*'),]
+Cramped = False  # True -> 画面サイズが小さい場合はLoremモジュールを割愛
 
 # メニュー定数
 POS = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se']
@@ -69,10 +70,10 @@ SP_HOLIDAY = [(1, 1),   # 元日
               (11, 23), # 勤労感謝の日
               ]
 
-HM_HOLIDAY =[(1, 2),  # 成人の日
-             (7, 3),  # 海の日
-             (9, 3),  # 敬老の日
-             (10, 2), # スポーツの日
+HM_HOLIDAY =[(1, 2),  # 成人の日     1月 第2月曜
+             (7, 3),  # 海の日       7月 第3月曜
+             (9, 3),  # 敬老の日     9月 第3月曜
+             (10, 2), # スポーツの日 10月第2月曜
              ]
 
 LOREM = 'Lorem ipsum dolor sit amet, consectetur adipiscing '+\
@@ -1714,12 +1715,13 @@ def efx(image, p: Param):
 
     lorem_info = LoremP(impose_preserv)
     
-    # UI panel                
+    # UI panel
+    flheight = FontList_Size - (3 if Cramped else 0) 
     fontset = [[sg.Text(f'Fonts ({strict_fname_len(fonts.font_dir,18)})',
                         key='-fdir-'),
                 sg.Button(' ... ', key='-fdsl-', background_color='#ddddff'),
                 sg.Button('Sys', key='-fdfl-'),],
-               [sg.Listbox(fkeys, key='-flst-', size=(35,FontList_Size),
+               [sg.Listbox(fkeys, key='-flst-', size=(35, flheight),
                            enable_events=True),],
                [],
                [sg.Text(fonts.key, key='-falt-', text_color='black'),],
@@ -1733,14 +1735,20 @@ def efx(image, p: Param):
     calparam = calendar_info.sub_layout(activate=True)
     txtparam = text_info.sub_layout()
     lorparam = lorem_info.sub_layout()
-        
-    cal_lo = [[sg.Column(layout=fontset),
-               sg.Column(layout=[calparam,
-                                 txtparam,
-                                 lorparam,[],
-                                 fontexblock,
-                                 ])
-               ]]
+
+    if Cramped:
+        cal_lo = [[sg.Column(layout=fontset),
+                   sg.Column(layout=[calparam,
+                                     txtparam,
+                                     fontexblock,])
+                   ]]
+    else:
+        cal_lo = [[sg.Column(layout=fontset),
+                   sg.Column(layout=[calparam,
+                                     txtparam,
+                                     lorparam,[],
+                                     fontexblock,])
+                   ]]
 
     buttonblock = [
         sg.Text(' ', expand_x=True, expand_y=True),
