@@ -7,6 +7,7 @@ v1.0.0 2025/12/26 stagger-tiled-stripeのパターン生成スクリプト(単�
       Microsoft: 鬱陶しいWindowsスポットライトが作成の原動力になりました
 '''
 
+from wall_common import *
 import importlib.util as impl
 from io import StringIO, BytesIO
 import sys
@@ -18,8 +19,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import TkEasyGUI as sg
 import threading
 import queue
-from wall_common import *
-from filedialog import *
+import filedialog as fdi
 import winwall
 
 DEFAULT_MODULE = 'stripe'
@@ -150,9 +150,10 @@ def search_aftereffects(efxlist: EfxModules, plugin_dir):
 def layout(modlist, efxlist):
     #x = ['AE_'+item for item in efxlist.modules]
     x = [item for item in efxlist.modules]
-    menudef = [['File', ['Load BG', '---', 'Save', 'Exit']],
+    menudef = [['File', ['Reload Palette', 'Stock Palette',
+                         '---', 'Save', 'Exit']],
                ['Module', modlist.modules],
-               ['Hold', ['Hold', 'Clear', 'Retrieve']],
+               ['BackGround', ['Hold', 'Clear', 'Load BG', 'Unhold']],
                ['Effects', x],
                ]
     
@@ -373,7 +374,7 @@ def update_preview(param, image, wn):
 
 def load_bgimage(p):
     Ftypes = [('Image file','*.png *.jpg *.bmp *.gif'),('Any','*.*'),]
-    src_path = get_openfile('', filetypes=Ftypes)
+    src_path = fdi.get_openfile('', filetypes=Ftypes)
     if src_path is None or not pa.exists(src_path):
         return None
     try:
@@ -496,7 +497,7 @@ def gui_main(modlist: Modules, mods, param: Param,
             break
         elif ev == 'Save' or ev == '-ok-':
             fname = pa.basename(param.file_name())
-            fname = get_savefile(fname)
+            fname = fdi.get_savefile(fname)
             if fname == '':
                 continue
             image.save(fname)
@@ -545,7 +546,22 @@ def gui_main(modlist: Modules, mods, param: Param,
             image = get_image_thread(wn, param, mods, modname)
             scale, cropos = update_preview(param, image, wn)
             continue
-        elif ev == 'Retrieve':
+        elif ev == 'Load BG':
+            bg = load_bgimage(param)
+            if bg is None:
+                continue
+            bg = bg.convert('RGBA')
+            scale, cropos = set_scale_init(param.width, param.height)
+            if bg is not None:
+                bg = bg.resize((param.width, param.height),
+                               resample=Image.LANCZOS)
+                param.unkeep()
+                param.h_img = bg  #param.keep(modname, bg)
+            
+                image = get_image_thread(wn, param, mods, modname)
+                scale, cropos = update_preview(param, image, wn)
+            continue
+        elif ev == 'Unhold':
             t = param.retrieve()
             if t in modlist.modules:
                 set_module(wn, modlist, t)
@@ -553,6 +569,7 @@ def gui_main(modlist: Modules, mods, param: Param,
                 param.savefile = ''
                 set_param(wn, param, modlist.mod_gui[t])
                 modname = t
+                param.h_img = None
                 image = get_image_thread(wn, param, mods, modname)  # param.bg()
                 scale, cropos = update_preview(param, image, wn)
             continue
@@ -590,20 +607,6 @@ def gui_main(modlist: Modules, mods, param: Param,
                     image = retv
                     scale, cropos = update_preview(param, image, wn)
                     set_param(wn, param, modlist.mod_gui[modname])
-            continue
-        elif ev == 'Load BG':
-            bg = load_bgimage(param)
-            if bg is None:
-                continue
-            bg = bg.convert('RGBA')
-            scale, cropos = set_scale_init(param.width, param.height)
-            if bg is not None:
-                bg = bg.resize((param.width, param.height),
-                               resample=Image.LANCZOS)
-                param.keep(modname, bg)
-            
-                image = get_image_thread(wn, param, mods, modname)
-                scale, cropos = update_preview(param, image, wn)
             continue
         elif isinstance(ev, str):
             widg = ev[1:-2]
