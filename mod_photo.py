@@ -11,6 +11,7 @@ SCALE = 100
 ANGLE = 0
 
 photo_preserv = {'file_name': ''}
+Cache = {'file':'', 'image':[]}
 
 def intro(modlist: Modules, module_name):
     '''module基本情報'''
@@ -34,6 +35,23 @@ def prevset(name, value):
         return photo_preserv[name]
     else:
         return value
+
+
+def image_open(file, fallback=(800,600), bg='gray'):
+    if Cache['file'] == file:
+       im = Cache['image']
+    else:
+        try:
+            im = Image.open(file)
+        except Image.UnidentifiedImageError:
+            im = None
+
+    if im is None and isinstance(fallback, tuple):
+        im = Image.new('RGB', fallback, bg)
+
+    Cache['file'] = file
+    Cache['image'] = im
+    return im
 
 
 # 詳細設定
@@ -98,10 +116,7 @@ def desc(p):
                                      init_dir=idir)
             fdi.flush_ev(wn)
             if fname != '':
-                try:
-                    im = Image.open(fname)
-                except Image.UnidentifiedImageError:
-                    continue
+                im = image_open(fname, fallback=(W,H))
                     
                 sw, sh = im.size
                 ang = int(stoi(va['-angle-'], default=0) % 360)
@@ -114,7 +129,7 @@ def desc(p):
             wn.refresh()
         elif ev == '-full-':
             if pa.exists(oldf):
-                im = Image.open(oldf)
+                im = image_open(oldf, fallback=(W,H))
                 sw, sh = im.size
                 ang = int(stoi(va['-angle-'], default=0) % 360)
                 rw, rh = calc_scale_inscribed(W, H, sw, sh, ang)
@@ -122,7 +137,7 @@ def desc(p):
                 wn['-scale-'].update(scl)
         elif ev == '-fit-':
             if pa.exists(oldf):
-                im = Image.open(oldf)
+                im = image_open(oldf, fallback=(W,H))
                 sw, sh = im.size
                 ang = int(stoi(va['-angle-'], default=0) % 360)
                 rw, rh = calc_scale_inscribed(W, H, sw, sh, ang)
@@ -175,10 +190,8 @@ def generate(p: Param):
     if not pa.exists(file_name):
         fixed_image = Image.new('RGBA', (W, H), bgcolor)
     else:
-        try:
-            img = Image.open(file_name).convert('RGBA')
-        except Image.UnidentifiedImageError:
-            img = Image.new('RGBA', (W, H), bgcolor)
+        img = image_open(file_name, fallback=(W,H),
+                         bg=bgcolor).convert('RGBA')
         sx,sy = img.size
         sr = scale / 100
 
